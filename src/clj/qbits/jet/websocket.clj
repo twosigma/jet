@@ -121,11 +121,12 @@
 
   BackPressure
   (backpressure! [this backpressure?]
-    (if backpressure?
-      (set! reads-suspend-token (.suspend session))
-      (do
-        (.resume reads-suspend-token)
-        (set! reads-suspend-token nil))))
+    (when reads-suspend-token
+      (if backpressure?
+        (set! reads-suspend-token (.suspend session))
+        (do
+          (.resume reads-suspend-token)
+          (set! reads-suspend-token nil)))))
 
   PWebSocket
   (remote [this]

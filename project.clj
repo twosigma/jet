@@ -1,4 +1,4 @@
-(def jetty-version "9.3.9.v20160517")
+(def jetty-version "9.4.5.v20170502")
 (defproject cc.qbits/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
@@ -22,7 +22,8 @@
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
-  :plugins [[info.sunng/lein-bootclasspath-deps "0.2.0"]]
+  :plugins [[info.sunng/lein-bootclasspath-deps "0.2.0"]
+            [lein-voom "0.1.0-20150115_230705-gd96d771"]]
   :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
                        :prepend true]]
 
@@ -32,7 +33,10 @@
                  "sonatype-snapshots" {:url "http://oss.sonatype.org/content/repositories/snapshots"
                                        :snapshots true
                                        :releases {:checksum :fail :update :always}}}
-  :profiles {:master {:dependencies [[org.clojure/clojure "1.9.0-master-SNAPSHOT"]]}
+  :profiles {:1.5 {:dependencies [[org.clojure/clojure "1.5.0"]]}
+             :1.6 {:dependencies [[org.clojure/clojure "1.6.0"]]}
+             :1.7 {:dependencies [[org.clojure/clojure "1.7.0-alpha4"]]}
+             :master {:dependencies [[org.clojure/clojure "1.7.0-master-SNAPSHOT"]]}
              :dev  {:dependencies [[ring/ring-core "1.3.0"
                                     :exclusions [javax.servlet/servlet-api]]
                                    [ring/ring-servlet "1.3.0"

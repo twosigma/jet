@@ -9,7 +9,8 @@
     File
     InputStream
     FileInputStream
-    OutputStream)
+    OutputStream
+    OutputStreamWriter)
    (javax.servlet
     AsyncContext
     AsyncListener)
@@ -97,7 +98,7 @@
   (.flushBuffer servlet-response))
 
 (defn- response->output-stream
-  ^OutputStream
+  ^OutputStreamWriter
   [^Response servlet-response]
   (-> servlet-response .getOutputStream))
 
@@ -121,7 +122,13 @@
 
   InputStream
   (-write-stream! [input-stream ^OutputStream os]
-    (io/copy input-stream os)))
+    (io/copy input-stream os)
+    (.flush os))
+
+  clojure.lang.Fn
+  (-write-stream! [f ^OutputStream output-stream]
+    (f output-stream)
+    (.flush output-stream)))
 
 (defn write-stream!
   [stream x request-map]

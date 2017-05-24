@@ -92,5 +92,5 @@ connection by closing the channel
 
     (.start client)
 
-    (.connect client ws (URI/create url))
+    (.connect client ws (URI/create url) request)
     (Connection. client request ws)))
