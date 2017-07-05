@@ -49,14 +49,16 @@ Derived from ring.adapter.jetty"
    (qbits.jet.websocket WebSocket)))
 
 (defn- make-ws-creator
-  [handler {:keys [in out ctrl]
+  [handler {:keys [in out ctrl websocket-acceptor]
             :or {in async/chan
                  out async/chan
-                 ctrl async/chan}
+                 ctrl async/chan
+                 websocket-acceptor (constantly true)}
             :as options}]
   (reify WebSocketCreator
-    (createWebSocket [this _ _]
-      (make-websocket (in) (out) (ctrl) handler))))
+    (createWebSocket [this request response]
+      (if (websocket-acceptor request response)
+        (make-websocket (in) (out) (ctrl) handler)))))
 
 (defn- make-ws-handler
   "Returns a Jetty websocket handler"
@@ -117,7 +119,9 @@ Derived from ring.adapter.jetty"
     (when keystore-type
       (.setKeyStoreType context keystore-type))
     (when truststore
-      (.setTrustStore context ^java.security.KeyStore truststore))
+      (if (string? truststore)
+        (.setTrustStorePath context truststore)
+        (.setTrustStore context ^java.security.KeyStore truststore)))
     (when trust-password
       (.setTrustStorePassword context trust-password))
     (when truststore-type
@@ -173,13 +177,16 @@ supplied options:
 
     * `:in`: core.async chan that receives data sent by the client
     * `:out`: core async chan you can use to send data to client
-    * `:ctrl`: core.async chan that received control messages such as: `[::error e]`, `[::close code reason]`"
+    * `:ctrl`: core.async chan that received control messages such as: `[::error e]`, `[::close code reason]`
+* `:websocket-acceptor`: a function called with (request response) that returns a boolean whether to further process the
+                         websocket request. If the function returns false, it is responsible for committing a response.
+                         If the function return true, a websocket is created and the `websocket-handler` is eventually
+                         called."
   [{:as options
     :keys [websocket-handler ring-handler host port max-threads min-threads
            input-buffer-size max-idle-time ssl-port configurator parser-compliance
            daemon? ssl? join? http2? http2c?]
-    :or {port 80
-         max-threads 50
+    :or {max-threads 50
          min-threads 8
          daemon? false
          max-idle-time 200000
@@ -187,7 +194,8 @@ supplied options:
          join? true
          parser-compliance HttpCompliance/LEGACY
          input-buffer-size 8192}}]
-  (let [pool (doto (QueuedThreadPool. (int max-threads)
+  (let [ssl? (some? (or ssl? ssl-port))
+        pool (doto (QueuedThreadPool. (int max-threads)
                                       (int min-threads))
                (.setDaemon daemon?))
         server (doto (Server. pool)
@@ -196,26 +204,32 @@ supplied options:
         http-connection-factory (doto (HttpConnectionFactory. http-conf)
                                   (.setHttpCompliance (any->parser-compliance parser-compliance))
                                   (.setInputBufferSize (int input-buffer-size)))
-        connectors (cond-> [(doto (ServerConnector.
-                                   ^Server server
-                                   ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
-                                   (into-array ConnectionFactory
-                                               (cond-> [http-connection-factory]
-                                                 http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
-                              (.setPort port)
-                              (.setHost host)
-                              (.setIdleTimeout max-idle-time))]
-                       (or ssl? ssl-port)
-                       (conj (doto (ServerConnector.
-                                    ^Server server
-                                    (ssl-context-factory options)
-                                    ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
-                                    (into-array ConnectionFactory
-                                                (cond-> [http-connection-factory]
-                                                  http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
-                               (.setPort ssl-port)
-                               (.setHost host)
-                               (.setIdleTimeout max-idle-time))))]
+        connectors (cond-> []
+                           ;; use HTTP if ssl is disabled or ssl is enabled and ssl-port is explicitly provided
+                           (or (not ssl?)
+                               (not (and ssl? ssl-port)))
+                           (conj (doto (ServerConnector.
+                                         ^Server server
+                                         ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
+                                         (into-array ConnectionFactory
+                                                     (cond-> [http-connection-factory]
+                                                             http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
+                                   (.setPort (or port 80))
+                                   (.setHost host)
+                                   (.setIdleTimeout max-idle-time)))
+                           ssl?
+                           (conj (doto (ServerConnector.
+                                         ^Server server
+                                         (ssl-context-factory options)
+                                         ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
+                                         (into-array ConnectionFactory
+                                                     (cond-> [http-connection-factory]
+                                                             http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
+                                   (.setPort (or ssl-port port 443))
+                                   (.setHost host)
+                                   (.setIdleTimeout max-idle-time))))]
+    (when (empty? connectors)
+      (throw (IllegalStateException. "No connectors found! HTTP port or SSL must be configured!")))
     (.setConnectors server (into-array Connector connectors))
     (when (or websocket-handler ring-handler)
       (let [hs (HandlerList.)]

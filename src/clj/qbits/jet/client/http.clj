@@ -66,18 +66,23 @@
     :xml (xml/parse (ByteArrayInputStream. bb))
     (ByteBuffer/wrap bb)))
 
-(defn fold-chunks+decode-xform [as]
+(defn fold-chunks+decode-xform [as buffer-size]
   (fn [reduction-function]
     (let [ba (ByteArrayOutputStream.)
-          state (atom ::open)]
+          state (atom ::open)
+          retrieve-data (fn [] (decode-body (.toByteArray ba) as))]
       (fn
         ([] (reduction-function))
         ([result]
          (when (compare-and-set! state ::open ::closed)
-           (reduction-function result (decode-body (.toByteArray ba) as))))
+           (reduction-function result (retrieve-data))))
         ([result chunk]
          (.write ba chunk)
-         (reduction-function result))))))
+         (if (>= (.size ba) buffer-size)
+           (let [data (retrieve-data)]
+             (.reset ba)
+             (reduction-function result data))
+           (reduction-function result)))))))
 
 (defn decode-chunk-xform
   [as]
@@ -276,17 +281,19 @@
            agent
            follow-redirects?
            fold-chunked-response?
+           fold-chunked-response-buffer-size
            ^Authentication$Result auth]
     :or {method :get
          as :string
          follow-redirects? true
-         fold-chunked-response? true}
+         fold-chunked-response? true
+         fold-chunked-response-buffer-size Integer/MAX_VALUE}
     :as request-map}]
   (let [ch (async/promise-chan)
         error-ch (async/promise-chan)
         body-ch (async/chan 1
                             (if fold-chunked-response?
-                              (fold-chunks+decode-xform as)
+                              (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
         request ^Request (.newRequest client ^String url)]
 

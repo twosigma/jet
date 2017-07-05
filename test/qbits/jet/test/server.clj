@@ -10,9 +10,10 @@
    [ring.middleware.params :as ring-params]
    [ring.middleware.keyword-params :as ring-kw-params])
   (:import
-   (org.eclipse.jetty.util.thread QueuedThreadPool)
-   (org.eclipse.jetty.server Server Request)
-   (org.eclipse.jetty.server.handler AbstractHandler)))
+    (org.eclipse.jetty.util.thread QueuedThreadPool)
+    (org.eclipse.jetty.server Server Request)
+    (org.eclipse.jetty.server.handler AbstractHandler)
+    (org.eclipse.jetty.websocket.client WebSocketClient)))
 
 ;; (defn set-uncaught-ex-handler!
 ;;   [f]
@@ -331,7 +332,8 @@
                       (async/go
                         (when (= "PING" (async/<! in))
                           (async/>! out "PONG"))))}
-        (ws/connect! (str "ws://0.0.0.0:" port "/app?foo=bar")
+        (ws/connect! (WebSocketClient.)
+                     (str "ws://0.0.0.0:" port "/app?foo=bar")
                      (fn [{:keys [in out ctrl]}]
                        (async/go
                          (async/>! out "PING")
@@ -350,7 +352,8 @@
                       (async/go
                         (when (= "PING" (String. (.array (async/<! in)) utf8))
                           (async/>! out (.getBytes "PONG" utf8)))))}
-        (ws/connect! (str "ws://0.0.0.0:" port "/app?foo=bar")
+        (ws/connect! (WebSocketClient.)
+                     (str "ws://0.0.0.0:" port "/app?foo=bar")
                      (fn [{:keys [in out ctrl]}]
                        (async/go
                          (async/>! out (.getBytes "PING" utf8))
