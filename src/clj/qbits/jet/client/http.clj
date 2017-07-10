@@ -29,7 +29,6 @@
       Response$CompleteListener
       Response$HeadersListener
       Request
-      Response
       Response$AsyncContentListener
       Result)
     (java.util.concurrent TimeUnit)
@@ -94,10 +93,10 @@
       ([result chunk]
        (reduction-function result (decode-body chunk as))))))
 
-(defrecord RResponse [request status headers body error-chan])
+(defrecord Response [request status headers body error-chan])
 
 (defn- make-response
-   [request ^Response response body-ch error-chan]
+   [request ^org.eclipse.jetty.client.api.Response response body-ch error-chan]
    (let [headers (reduce (fn [m ^HttpField h]
                              (let [k (string/lower-case (.getName h))
                                    v (.getValue h)]
@@ -109,7 +108,7 @@
                          {}
                          ^HttpFields (.getHeaders response))
          status (.getStatus response)]
-     (RResponse. request status headers body-ch error-chan)))
+     (Response. request status headers body-ch error-chan)))
 
 (defprotocol PRequest
   (encode-chunk [x])
