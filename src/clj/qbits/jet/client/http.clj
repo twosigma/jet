@@ -99,7 +99,13 @@
 (defn- make-response
    [request ^Response response body-ch error-chan]
    (let [headers (reduce (fn [m ^HttpField h]
-                             (assoc m (string/lower-case (.getName h)) (.getValue h)))
+                             (let [k (string/lower-case (.getName h))
+                                   v (.getValue h)]
+                                  (if (contains? m k)
+                                    (if (coll? (m k))
+                                      (assoc m k (conj (m k) v))
+                                      (assoc m k [(m k) v]))
+                                    (assoc m k v))))
                          {}
                          ^HttpFields (.getHeaders response))
          status (.getStatus response)]
