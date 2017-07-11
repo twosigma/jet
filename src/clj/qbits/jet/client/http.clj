@@ -29,7 +29,6 @@
       Response$CompleteListener
       Response$HeadersListener
       Request
-      ;; Response
       Response$AsyncContentListener
       Result)
     (java.util.concurrent TimeUnit)
@@ -94,22 +93,22 @@
       ([result chunk]
        (reduction-function result (decode-body chunk as))))))
 
-(defrecord Response [status headers body error-chan])
+(defrecord Response [request status headers body error-chan])
 
-(defn ^:no-doc result->response
-  [^Result result body-ch]
-  (let [response (.getResponse result)
-        error-ch (async/promise-chan)]
-    (if (.isSucceeded result)
-      (async/close! error-ch)
-      (async/put! error-ch {:error (.getFailure result)}))
-    (Response. (.getStatus response)
-               (reduce (fn [m ^HttpField h]
-                         (assoc m (string/lower-case  (.getName h)) (.getValue h)))
-                       {}
-                       ^HttpFields (.getHeaders response))
-               body-ch
-               error-ch)))
+(defn- make-response
+   [request ^org.eclipse.jetty.client.api.Response response body-ch error-chan]
+   (let [headers (reduce (fn [m ^HttpField h]
+                             (let [k (string/lower-case (.getName h))
+                                   v (.getValue h)]
+                                  (if (contains? m k)
+                                    (if (coll? (m k))
+                                      (assoc m k (conj (m k) v))
+                                      (assoc m k [(m k) v]))
+                                    (assoc m k v))))
+                         {}
+                         ^HttpFields (.getHeaders response))
+         status (.getStatus response)]
+     (Response. request status headers body-ch error-chan)))
 
 (defprotocol PRequest
   (encode-chunk [x])
@@ -295,7 +294,7 @@
                             (if fold-chunked-response?
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
-        request ^Request (.newRequest client ^String url)]
+        ^Request request (.newRequest client ^String url)]
 
     (.followRedirects request follow-redirects?)
 
@@ -352,20 +351,7 @@
     (.onResponseHeaders request
                         (reify Response$HeadersListener
                           (onHeaders [this response]
-                            (async/put! ch
-                                        (Response. (.getStatus response)
-                                                   (reduce (fn [m ^HttpField h]
-                                                             (let [k (string/lower-case (.getName h))
-                                                                   v (.getValue h)]
-                                                               (if (contains? m k)
-                                                                 (if (coll? (m k))
-                                                                   (assoc m k (conj (m k) v))
-                                                                   (assoc m k [(m k) v]))
-                                                                 (assoc m k v))))
-                                                           {}
-                                                           ^HttpFields (.getHeaders response))
-                                                   body-ch
-                                                   error-ch)))))
+                            (async/put! ch (make-response request response body-ch error-ch)))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
