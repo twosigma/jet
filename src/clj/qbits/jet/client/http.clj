@@ -341,7 +341,7 @@
         (.param request (name k) (str v))))
 
     (when cookies
-      (doseq [[name {:keys [value]}] cookies]
+      (doseq [[name value] cookies]
         (.cookie request (HttpCookie. name value))))
 
     (.onResponseContentAsync request
