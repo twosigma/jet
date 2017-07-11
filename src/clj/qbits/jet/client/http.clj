@@ -19,7 +19,8 @@
       DeferredContentProvider
       InputStreamContentProvider
       PathContentProvider
-      FormContentProvider)
+      FormContentProvider
+      MultiPartContentProvider)
     (org.eclipse.jetty.http
       HttpFields
       HttpField)
@@ -283,7 +284,8 @@
            fold-chunked-response?
            fold-chunked-response-buffer-size
            ^Authentication$Result auth
-           cookies]
+           cookies
+           multipart]
     :or {method :get
          as :string
          follow-redirects? true
@@ -320,6 +322,14 @@
                                         (doseq [[k v] form-params]
                                           (.add f (name k) (str v)))
                                         f))))
+
+       (when (seq multipart)
+             (.content request
+                       (let [provider (MultiPartContentProvider.)]
+                            (doseq [[k v] multipart]
+                                   (.addFieldPart provider k (StringContentProvider. v) nil))
+                            (.close provider)
+                            provider)))
 
     (when body
       (.content request (encode-body body)))
