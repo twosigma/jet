@@ -32,6 +32,7 @@
       Response$AsyncContentListener
       Result)
     (java.util.concurrent TimeUnit)
+    java.net.HttpCookie
     (java.nio ByteBuffer)
     (java.io
       ByteArrayInputStream
@@ -281,7 +282,8 @@
            follow-redirects?
            fold-chunked-response?
            fold-chunked-response-buffer-size
-           ^Authentication$Result auth]
+           ^Authentication$Result auth
+           cookies]
     :or {method :get
          as :string
          follow-redirects? true
@@ -337,6 +339,10 @@
         (doseq [v' v]
           (.param request (name k) (str v')))
         (.param request (name k) (str v))))
+
+    (when cookies
+      (doseq [[name value] cookies]
+        (.cookie request (HttpCookie. name value))))
 
     (.onResponseContentAsync request
                              (reify Response$AsyncContentListener
