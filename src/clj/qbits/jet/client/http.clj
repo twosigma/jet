@@ -327,7 +327,7 @@
              (.content request
                        (let [provider (MultiPartContentProvider.)]
                             (doseq [[k v] multipart]
-                                   (.addFieldPart provider k (StringContentProvider. v) nil))
+                                   (.addFieldPart provider k v nil))
                             (.close provider)
                             provider)))
 
