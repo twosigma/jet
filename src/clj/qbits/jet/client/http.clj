@@ -19,12 +19,14 @@
       DeferredContentProvider
       InputStreamContentProvider
       PathContentProvider
-      FormContentProvider)
+      FormContentProvider
+      MultiPartContentProvider)
     (org.eclipse.jetty.http
       HttpFields
       HttpField)
     (org.eclipse.jetty.client.api
       Authentication$Result
+      ContentProvider
       Request$FailureListener
       Response$CompleteListener
       Response$HeadersListener
@@ -283,7 +285,8 @@
            fold-chunked-response?
            fold-chunked-response-buffer-size
            ^Authentication$Result auth
-           cookies]
+           cookies
+           multipart]
     :or {method :get
          as :string
          follow-redirects? true
@@ -320,6 +323,18 @@
                                         (doseq [[k v] form-params]
                                           (.add f (name k) (str v)))
                                         f))))
+
+       (when (seq multipart)
+             (.content request
+                       (let [provider (MultiPartContentProvider.)]
+                            (doseq [[k v] multipart]
+                                   (let [content (cond
+                                                   (string? v) (StringContentProvider. v)
+                                                   (instance? ContentProvider v) v
+                                                   :else (throw (ex-info "Invalid multipart value" {k v})))]
+                                        (.addFieldPart provider k content nil)))
+                            (.close provider)
+                            provider)))
 
     (when body
       (.content request (encode-body body)))
