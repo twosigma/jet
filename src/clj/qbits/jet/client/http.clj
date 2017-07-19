@@ -26,6 +26,7 @@
       HttpField)
     (org.eclipse.jetty.client.api
       Authentication$Result
+      ContentProvider
       Request$FailureListener
       Response$CompleteListener
       Response$HeadersListener
