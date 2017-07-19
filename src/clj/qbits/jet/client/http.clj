@@ -327,7 +327,11 @@
              (.content request
                        (let [provider (MultiPartContentProvider.)]
                             (doseq [[k v] multipart]
-                                   (.addFieldPart provider k v nil))
+                                   (let [content (cond
+                                                   (string? v) (StringContentProvider. v)
+                                                   (instance? ContentProvider v) v
+                                                   :else (throw (ex-info "Invalid multipart value" {k v})))])
+                                   (.addFieldPart provider k content nil))
                             (.close provider)
                             provider)))
 
