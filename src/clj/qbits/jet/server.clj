@@ -63,12 +63,27 @@ Derived from ring.adapter.jetty"
 (defn- make-ws-handler
   "Returns a Jetty websocket handler"
   [handlers {:as options
-             :keys [ws-max-idle-time]
+             :keys [ws-input-buffer-size
+                    ws-max-binary-message-buffer-size
+                    ws-max-binary-message-size
+                    ws-max-idle-time
+                    ws-max-text-message-buffer-size
+                    ws-max-text-message-size]
              :or {ws-max-idle-time 500000}}]
   (proxy [WebSocketHandler] []
     (configure [^WebSocketServletFactory factory]
-      (-> (.getPolicy factory)
-          (.setIdleTimeout ws-max-idle-time))
+      (let [ws-policy (.getPolicy factory)]
+        (.setIdleTimeout ws-policy ws-max-idle-time)
+        (when ws-max-binary-message-buffer-size
+          (.setMaxBinaryMessageBufferSize ws-policy ws-max-binary-message-buffer-size))
+        (when ws-max-binary-message-size
+          (.setMaxBinaryMessageSize ws-policy ws-max-binary-message-size))
+        (when ws-max-text-message-buffer-size
+          (.setMaxTextMessageBufferSize ws-policy ws-max-text-message-buffer-size))
+        (when ws-max-text-message-size
+          (.setMaxTextMessageSize ws-policy ws-max-text-message-size))
+        (when ws-input-buffer-size
+          (.setInputBufferSize ws-policy ws-input-buffer-size)))
       (.setCreator factory (make-ws-creator handlers options)))))
 
 (defn- make-handler
