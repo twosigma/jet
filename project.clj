@@ -22,8 +22,8 @@
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
-  :plugins [[info.sunng/lein-bootclasspath-deps "0.2.0"]
-            [lein-voom "0.1.0-20150115_230705-gd96d771"]]
+  :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]
+            [lein-voom "0.1.0-20171225_233657-g7962d1d"]]
   :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
                        :prepend true]]
 
