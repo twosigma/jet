@@ -340,7 +340,10 @@
       (.content request (encode-body body)))
 
     (doseq [[k v] headers]
-      (.header request (name k) (str v)))
+      (if (coll? v)
+        (doseq [v' v]
+          (.header request (name k) (str v')))
+        (.header request (name k) (str v))))
 
     (when content-type
       (.header request "Content-Type"
