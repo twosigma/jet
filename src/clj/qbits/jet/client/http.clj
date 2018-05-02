@@ -277,9 +277,9 @@
 (defn- set-query-string!
   "Configures the query string in the request object directly."
   [^HttpRequest request query-string]
-  (let [query-field (.getDeclaredField HttpRequest "query")]
-    (.setAccessible query-field true)
-    (.set query-field request query-string)))
+  (doto (.getDeclaredField HttpRequest "query")
+    (.setAccessible true)
+    (.set request query-string)))
 
 (defn request
   [^HttpClient client
