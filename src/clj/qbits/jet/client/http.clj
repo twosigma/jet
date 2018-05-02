@@ -361,10 +361,8 @@
     (when auth
       (.apply auth request))
 
-    (cond
-      (string? query-string)
+    (if (string? query-string)
       (set-query-string! request query-string)
-      :else
       (doseq [[k v] query-string]
         (if (coll? v)
           (doseq [v' v]
