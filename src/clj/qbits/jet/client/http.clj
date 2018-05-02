@@ -10,7 +10,9 @@
    [cheshire.core :as json]
    [clojure.xml :as xml])
   (:import
-    (org.eclipse.jetty.client HttpClient)
+    (org.eclipse.jetty.client
+      HttpClient
+      HttpRequest)
     (org.eclipse.jetty.util Fields)
     (org.eclipse.jetty.client.util
       StringContentProvider
@@ -272,6 +274,13 @@
   [^HttpClient cl]
   (.stop cl))
 
+(defn- set-query-string!
+  "Configures the query string in the request object directly."
+  [^HttpRequest request query-string]
+  (let [query-field (.getDeclaredField HttpRequest "query")]
+    (.setAccessible query-field true)
+    (.set query-field request query-string)))
+
 (defn request
   [^HttpClient client
    {:keys [url method query-string form-params headers body
@@ -352,11 +361,15 @@
     (when auth
       (.apply auth request))
 
-    (doseq [[k v] query-string]
-      (if (coll? v)
-        (doseq [v' v]
-          (.param request (name k) (str v')))
-        (.param request (name k) (str v))))
+    (cond
+      (string? query-string)
+      (set-query-string! request query-string)
+      :else
+      (doseq [[k v] query-string]
+        (if (coll? v)
+          (doseq [v' v]
+            (.param request (name k) (str v')))
+          (.param request (name k) (str v)))))
 
     (when cookies
       (doseq [[name value] cookies]
