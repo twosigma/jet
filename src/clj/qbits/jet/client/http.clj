@@ -281,6 +281,18 @@
     (.setAccessible true)
     (.set request query-string)))
 
+(defn- untyped-content-provider
+  [^ContentProvider content-provider]
+  (reify
+    ContentProvider
+    ;; interface ContentProvider methods
+    (getLength [_] (.getLength content-provider))
+    (isReproducible [_] (.isReproducible content-provider))
+    ;; interface Iterable<ByteBuffer> methods
+    (iterator [_] (.iterator content-provider))
+    (forEach [_ action] (.forEach content-provider action))
+    (spliterator [_] (.spliterator content-provider))))
+
 (defn request
   [^HttpClient client
    {:keys [url method query-string form-params headers body
@@ -346,7 +358,9 @@
                             provider)))
 
     (when body
-      (.content request (encode-body body)))
+      (->> (encode-body body)
+           untyped-content-provider
+           (.content request)))
 
     (doseq [[k v] headers]
       (if (coll? v)
