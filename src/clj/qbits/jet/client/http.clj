@@ -311,7 +311,8 @@
            fold-chunked-response-buffer-size
            ^Authentication$Result auth
            cookies
-           multipart]
+           multipart
+           version]
     :or {method :get
          as :string
          follow-redirects? true
@@ -325,6 +326,9 @@
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
         ^Request request (.newRequest client ^String url)]
+
+    (when version
+      (.version request version))
 
     (.followRedirects request follow-redirects?)
 
