@@ -17,7 +17,7 @@
                  [org.eclipse.jetty/jetty-alpn-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.2.v20150522"]
                  [org.eclipse.jetty.http2/http2-common ~jetty-version]
-                 ;; [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
+                 [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  ;; [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]

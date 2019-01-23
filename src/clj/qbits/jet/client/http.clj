@@ -35,6 +35,8 @@
       Request
       Response$AsyncContentListener
       Result)
+    (org.eclipse.jetty.client.http
+      HttpClientTransportOverHTTP)
     (java.util.concurrent TimeUnit)
     java.net.HttpCookie
     (java.nio ByteBuffer)
@@ -210,17 +212,19 @@
             dispatch-io?
             tcp-no-delay?
             strict-event-ordering?
-            ssl-context-factory]
+            ssl-context-factory
+            transport]
      :or {remove-idle-destinations? true
           dispatch-io? true
           follow-redirects? true
           tcp-no-delay? true
           strict-event-ordering? false
           ssl-context-factory @default-insecure-ssl-context-factory
+          transport (HttpClientTransportOverHTTP.)
           request-buffer-size default-buffer-size
           response-buffer-size default-buffer-size}
      :as r}]
-   (let [client (HttpClient. ssl-context-factory)]
+   (let [client (HttpClient. transport ssl-context-factory)]
 
      (when address-resolution-timeout
        (.setAddressResolutionTimeout client (long address-resolution-timeout)))
