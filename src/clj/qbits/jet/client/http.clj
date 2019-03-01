@@ -25,7 +25,8 @@
       MultiPartContentProvider)
     (org.eclipse.jetty.http
       HttpFields
-      HttpField)
+      HttpField
+      HttpVersion)
     (org.eclipse.jetty.client.api
       Authentication$Result
       ContentProvider
@@ -327,8 +328,9 @@
                               (decode-chunk-xform as)))
         ^Request request (.newRequest client ^String url)]
 
-    (when version
-      (.version request version))
+    (some->> version
+      HttpVersion/fromString
+      (.version request))
 
     (.followRedirects request follow-redirects?)
 
