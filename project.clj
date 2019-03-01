@@ -1,5 +1,5 @@
 (def jetty-version "9.4.9.v20180320")
-(defproject cc.qbits/jet "0.7.10"
+(defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
   :license {:name "Eclipse Public License"
@@ -22,8 +22,7 @@
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
-  :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]
-            [lein-voom "0.1.0-20171225_233657-g7962d1d"]]
+  :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]]
   :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
                        :prepend true]]
 
