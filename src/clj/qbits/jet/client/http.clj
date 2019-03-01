@@ -34,6 +34,7 @@
       Response$CompleteListener
       Response$HeadersListener
       Request
+      Response
       Response$AsyncContentListener
       Result)
     (org.eclipse.jetty.client.http
@@ -101,10 +102,8 @@
       ([result chunk]
        (reduction-function result (decode-body chunk as))))))
 
-(defrecord Response [request status headers body error-chan])
-
 (defn- make-response
-   [request ^org.eclipse.jetty.client.api.Response response body-ch error-chan]
+   [request ^Response response body-ch error-chan]
    (let [headers (reduce (fn [m ^HttpField h]
                              (let [k (string/lower-case (.getName h))
                                    v (.getValue h)]
@@ -116,7 +115,11 @@
                          {}
                          ^HttpFields (.getHeaders response))
          status (.getStatus response)]
-     (Response. request status headers body-ch error-chan)))
+     {:body body-ch
+      :error-chan error-chan
+      :headers headers
+      :request request
+      :status status}))
 
 (defprotocol PRequest
   (encode-chunk [x])
