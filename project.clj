@@ -1,4 +1,4 @@
-(def jetty-version "9.4.9.v20180320")
+(def jetty-version "9.4.15.v20190215")
 (defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
@@ -15,10 +15,10 @@
                  [org.eclipse.jetty.websocket/websocket-client ~jetty-version]
                  [org.eclipse.jetty/jetty-client ~jetty-version]
                  [org.eclipse.jetty/jetty-alpn-server ~jetty-version]
-                 [org.eclipse.jetty.alpn/alpn-api "1.1.2.v20150522"]
+                 [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
                  [org.eclipse.jetty.http2/http2-common ~jetty-version]
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
-                 ;; [org.eclipse.jetty.http2/http2-client ~jetty-version]
+                 [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
