@@ -22,10 +22,7 @@
                  ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
-  :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]
-            [lein-voom "0.1.0-20180617_140646-g0ba7ec8" :exclusions [org.clojure/core.logic]]
-            ;; 0.8.10 of core.logic is not clojure 1.10 compatible
-            [org.clojure/core.logic "0.8.11"]]
+  :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]]
   :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
                        :prepend true]]
 
