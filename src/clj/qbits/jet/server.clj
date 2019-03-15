@@ -209,8 +209,7 @@ supplied options:
          join? true
          parser-compliance HttpCompliance/LEGACY
          input-buffer-size 8192}}]
-  (let [ssl? (some? (or ssl? ssl-port))
-        pool (doto (QueuedThreadPool. (int max-threads)
+  (let [pool (doto (QueuedThreadPool. (int max-threads)
                                       (int min-threads))
                (.setDaemon daemon?))
         server (doto (Server. pool)
@@ -219,30 +218,32 @@ supplied options:
         http-connection-factory (doto (HttpConnectionFactory. http-conf)
                                   (.setHttpCompliance (any->parser-compliance parser-compliance))
                                   (.setInputBufferSize (int input-buffer-size)))
+        ssl-enabled? (some? (or ssl? ssl-port))
         connectors (cond-> []
-                           ;; use HTTP if ssl is disabled or ssl is enabled and ssl-port is explicitly provided
-                           (or (not ssl?)
-                               (not (and ssl? ssl-port)))
-                           (conj (doto (ServerConnector.
-                                         ^Server server
-                                         ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
-                                         (into-array ConnectionFactory
-                                                     (cond-> [http-connection-factory]
-                                                             http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
-                                   (.setPort (or port 80))
-                                   (.setHost host)
-                                   (.setIdleTimeout max-idle-time)))
-                           ssl?
-                           (conj (doto (ServerConnector.
-                                         ^Server server
-                                         (ssl-context-factory options)
-                                         ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
-                                         (into-array ConnectionFactory
-                                                     (cond-> [http-connection-factory]
-                                                             http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
-                                   (.setPort (or ssl-port port 443))
-                                   (.setHost host)
-                                   (.setIdleTimeout max-idle-time))))]
+                     ;; use HTTP if ssl is disabled or
+                     ;;             ssl is explicitly enabled and ssl-port is explicitly provided
+                     (or (not ssl-enabled?)
+                         (and ssl? ssl-port))
+                     (conj (doto (ServerConnector.
+                                   ^Server server
+                                   ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
+                                   (into-array ConnectionFactory
+                                               (cond-> [http-connection-factory]
+                                                 http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
+                             (.setPort (or port 80))
+                             (.setHost host)
+                             (.setIdleTimeout max-idle-time)))
+                     ssl-enabled?
+                     (conj (doto (ServerConnector.
+                                   ^Server server
+                                   (ssl-context-factory options)
+                                   ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
+                                   (into-array ConnectionFactory
+                                               (cond-> [http-connection-factory]
+                                                 http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
+                             (.setPort (or ssl-port port 443))
+                             (.setHost host)
+                             (.setIdleTimeout max-idle-time))))]
     (when (empty? connectors)
       (throw (IllegalStateException. "No connectors found! HTTP port or SSL must be configured!")))
     (.setConnectors server (into-array Connector connectors))
