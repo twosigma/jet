@@ -6,8 +6,8 @@ Derived from ring.adapter.jetty"
    [clojure.core.async :as async]
    [qbits.jet.websocket :refer :all])
   (:import
-   ;; (org.eclipse.jetty.alpn.server
-   ;;  ALPNServerConnectionFactory)
+    (org.eclipse.jetty.alpn.server
+      ALPNServerConnectionFactory)
    (org.eclipse.jetty.server
     Connector
     Handler
@@ -20,6 +20,8 @@ Derived from ring.adapter.jetty"
     ConnectionFactory)
    (org.eclipse.jetty.http
     HttpCompliance)
+   (org.eclipse.jetty.http2
+     HTTP2Cipher)
    (org.eclipse.jetty.http2.server
     HTTP2ServerConnectionFactory
     HTTP2CServerConnectionFactory)
@@ -124,7 +126,8 @@ Derived from ring.adapter.jetty"
 (defn- ^SslContextFactory ssl-context-factory
   "Creates a new SslContextFactory instance from a map of options."
   [{:as options
-    :keys [keystore keystore-type key-password client-auth
+    :keys [client-auth http2?
+           keystore keystore-type key-password
            truststore trust-password truststore-type]}]
   (let [context (SslContextFactory.)]
     (if (string? keystore)
@@ -145,6 +148,8 @@ Derived from ring.adapter.jetty"
       :need (.setNeedClientAuth context true)
       :want (.setWantClientAuth context true)
       nil)
+    (when http2?
+      (.setCipherComparator context HTTP2Cipher/COMPARATOR))
     context))
 
 (defn ^HttpCompliance any->parser-compliance
@@ -239,7 +244,8 @@ supplied options:
                                    (ssl-context-factory options)
                                    ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
                                    (into-array ConnectionFactory
-                                               (cond-> [http-connection-factory]
+                                               (cond-> [(ALPNServerConnectionFactory. ^String (cond->> "http/1.1" http2? (str "h2,")))
+                                                        http-connection-factory]
                                                  http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
                              (.setPort (or ssl-port port 443))
                              (.setHost host)
