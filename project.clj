@@ -5,7 +5,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
+                 [org.mortbay.jetty.alpn/alpn-boot "8.1.13.v20181017"
                   :prepend true]
                  [org.clojure/core.async "0.2.374"]
                  [org.eclipse.jetty/jetty-server ~jetty-version]
@@ -14,16 +14,16 @@
                  [org.eclipse.jetty.websocket/websocket-servlet ~jetty-version]
                  [org.eclipse.jetty.websocket/websocket-client ~jetty-version]
                  [org.eclipse.jetty/jetty-client ~jetty-version]
-                 [org.eclipse.jetty/jetty-alpn-server ~jetty-version]
+                 [org.eclipse.jetty/jetty-alpn-openjdk8-client ~jetty-version]
+                 [org.eclipse.jetty/jetty-alpn-openjdk8-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
                  [org.eclipse.jetty.http2/http2-common ~jetty-version]
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  [org.eclipse.jetty.http2/http2-client ~jetty-version]
-                 ;; [org.eclipse.jetty/jetty-alpn-client ~jetty-version]
                  [cheshire "5.5.0"]]
 
   :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]]
-  :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.3.v20150130"
+  :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.13.v20181017"
                        :prepend true]]
 
   :repositories {"sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
