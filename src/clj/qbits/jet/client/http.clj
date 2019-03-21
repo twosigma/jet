@@ -143,6 +143,28 @@
   (encode-body [p]
     (PathContentProvider. p))
 
+  javax.servlet.ServletInputStream
+  (encode-body [s]
+    (let [cp (DeferredContentProvider. (into-array ByteBuffer nil))
+          buffer (byte-array 8192)
+          rl (reify
+               javax.servlet.ReadListener
+               (onDataAvailable [_]
+                 (try
+                   (loop []
+                     (let [bytes-read (.read s buffer)]
+                       (when (pos? bytes-read)
+                         (.offer cp (ByteBuffer/wrap buffer 0 bytes-read))
+                         (recur))))
+                  (catch Throwable th
+                    (.failed cp th))))
+               (onAllDataRead [_]
+                 (.close cp))
+               (onError [_ th]
+                 (.failed cp th)))]
+      (.setReadListener s rl)
+      cp))
+
   java.io.InputStream
   (encode-body [s]
     (InputStreamContentProvider. s))
