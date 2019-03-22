@@ -145,7 +145,13 @@
 
   javax.servlet.ServletInputStream
   (encode-body [s]
-    (let [cp (DeferredContentProvider. (into-array ByteBuffer nil))
+    (println "encode-body.ServletInputStream")
+    (let [cp (proxy [DeferredContentProvider]
+                    [(into-array ByteBuffer nil)]
+               (close []
+                 (println "DeferredContentProvider.close")
+                 (proxy-super close)))
+          bytes-read-counter (atom 0)
           buffer (byte-array 8192)
           rl (reify
                javax.servlet.ReadListener
@@ -153,14 +159,23 @@
                  (try
                    (loop []
                      (let [bytes-read (.read s buffer)]
+                       (println "onDataAvailable: bytes read" bytes-read (.isFinished s))
                        (when (pos? bytes-read)
+                         (swap! bytes-read-counter + bytes-read)
                          (.offer cp (ByteBuffer/wrap buffer 0 bytes-read))
                          (recur))))
                   (catch Throwable th
+                    (.printStackTrace th)
                     (.failed cp th))))
                (onAllDataRead [_]
-                 (.close cp))
+                 (try
+                   (println "onAllDataRead: total bytes read" @bytes-read-counter)
+                   (.close cp)
+                   (catch Throwable th
+                     (.printStackTrace th)
+                     (.failed cp th))))
                (onError [_ th]
+                 (.printStackTrace th)
                  (.failed cp th)))]
       (.setReadListener s rl)
       cp))
