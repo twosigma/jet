@@ -1,23 +1,22 @@
 (ns qbits.jet.servlet
   "Compatibility functions for turning a ring handler into a Java servlet."
   (:require
-   [clojure.java.io :as io]
-   [clojure.string :as string]
-   [clojure.core.async :as async])
+    [clojure.core.async :as async]
+    [clojure.java.io :as io]
+    [clojure.string :as string]
+    [qbits.jet.util :as util])
   (:import
-   (java.io
-    File
-    InputStream
-    FileInputStream
-    OutputStream
-    OutputStreamWriter)
-   (javax.servlet
-    AsyncContext
-    AsyncListener)
-   (org.eclipse.jetty.server Request Response)
-   (javax.servlet.http
-    HttpServlet
-    HttpServletResponse)))
+    (java.io
+      File
+      InputStream
+      FileInputStream
+      OutputStream
+      OutputStreamWriter)
+    (javax.servlet
+      AsyncContext
+      AsyncListener)
+    (org.eclipse.jetty.server Request Response)
+    (javax.servlet.http HttpServletResponse)))
 
 (defn chan?
   [x]
@@ -34,7 +33,7 @@
             (enumeration-seq)
             (string/join ","))))
    {}
-   (enumeration-seq (.getHeaderNames request))))
+    (enumeration-seq (.getHeaderNames request))))
 
 (defn- get-content-length
   "Returns the content length, or nil if there is no content."
@@ -50,21 +49,26 @@
 (defn build-request-map
   "Create the request map from the HttpServletRequest object."
   [^Request request]
-  {:servlet-request    request
-   :server-port        (.getServerPort request)
-   :server-name        (.getServerName request)
-   :remote-addr        (.getRemoteAddr request)
-   :uri                (.getRequestURI request)
-   :query-string       (.getQueryString request)
-   :scheme             (keyword (.getScheme request))
-   :request-method     (keyword (.toLowerCase (.getMethod request)))
-   :headers            (get-headers request)
-   :content-type       (.getContentType request)
-   :content-length     (get-content-length request)
-   :character-encoding (.getCharacterEncoding request)
-   :ssl-client-cert    (get-client-cert request)
-   :ctrl               (async/chan)
-   :body               (.getInputStream request)})
+  (let [request-headers (get-headers request)]
+    {:servlet-request request
+     :server-port (.getServerPort request)
+     :server-name (.getServerName request)
+     :remote-addr (.getRemoteAddr request)
+     :uri (.getRequestURI request)
+     :query-string (.getQueryString request)
+     :scheme (keyword (.getScheme request))
+     :request-method (keyword (.toLowerCase (.getMethod request)))
+     :headers request-headers
+     :trailers-fn (when (util/trailers-supported? (.getProtocol request) request-headers)
+                    (fn retrieve-trailers []
+                      ;; trailers will only be available after body has been consumed
+                      (some-> request .getTrailers util/http-fields->map)))
+     :content-type (.getContentType request)
+     :content-length (get-content-length request)
+     :character-encoding (.getCharacterEncoding request)
+     :ssl-client-cert (get-client-cert request)
+     :ctrl (async/chan)
+     :body (.getInputStream request)}))
 
 (defn- set-status+headers!
   "Update a HttpServletResponse with a map of headers."
@@ -263,9 +267,11 @@
 
   clojure.lang.IPersistentMap
   (-update-response [response-map request-map]
-    (let [{:keys [status headers body]} response-map
+    (let [{:keys [status headers body trailers]} response-map
           ^Request servlet-request (:servlet-request request-map)
           servlet-response  (.getServletResponse servlet-request)]
+      (when trailers
+        (.setTrailers ^Response servlet-response (util/trailers-ch->supplier trailers)))
       (set-status+headers! servlet-response request-map status headers)
       (set-body! servlet-response request-map body)))
 
