@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as async]
             [clojure.string :as string])
   (:import (java.util.function Supplier)
-           (org.eclipse.jetty.http HttpField HttpFields)))
+           (org.eclipse.jetty.http HttpField HttpFields HttpVersion)))
 
 (defn http-fields->map
   [^HttpFields hfs]
@@ -30,7 +30,7 @@
 
 (defn trailers-supported?
   [^String request-protocol {:strs [content-length transfer-encoding]}]
-  (or (= "HTTP/2.0" request-protocol)
+  (or (= (.asString HttpVersion/HTTP_2) request-protocol)
       (and (nil? content-length) (= transfer-encoding "chunked"))))
 
 (defn trailers-fn->supplier
