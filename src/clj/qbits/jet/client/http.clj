@@ -417,18 +417,16 @@
                          (onFailure [_ _ throwable]
                            (async/put! ch {:error throwable}))))
 
-    (.onResponseSuccess request
-                        (reify Response$SuccessListener
-                          (onSuccess [_ response]
-                            (when-let [trailers (.getTrailers ^HttpResponse response)]
-                              (async/put! trailers-ch (util/http-fields->map trailers))))))
-
     (.send request
            (reify Response$CompleteListener
              (onComplete [_ result]
-               (when (not (.isSucceeded ^Result result))
+               (when (not (.isSucceeded result))
                    (async/put! ch {:error (.getFailure result)})
                    (async/put! error-ch {:error (.getFailure result)}))
+               (when-let [response (.getResponse result)]
+                 (when (instance? HttpResponse response)
+                   (when-let [trailers (.getTrailers ^HttpResponse response)]
+                     (async/>!! trailers-ch (util/http-fields->map trailers)))))
                (async/close! body-ch)
                (async/close! trailers-ch)
                (async/close! ch)
