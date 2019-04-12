@@ -270,7 +270,7 @@
     (let [{:keys [status headers body trailers]} response-map
           ^Request servlet-request (:servlet-request request-map)
           servlet-response  (.getServletResponse servlet-request)]
-      (when trailers
+      (when (and trailers (instance? Response servlet-response))
         (.setTrailers ^Response servlet-response (util/trailers-ch->supplier trailers)))
       (set-status+headers! servlet-response request-map status headers)
       (set-body! servlet-response request-map body)))

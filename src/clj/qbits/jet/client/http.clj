@@ -25,19 +25,17 @@
       FormContentProvider
       MultiPartContentProvider)
     (org.eclipse.jetty.http
-      HttpFields
       HttpField
       HttpVersion)
     (org.eclipse.jetty.client.api
       Authentication$Result
       ContentProvider
+      Request
       Request$FailureListener
       Response
       Response$CompleteListener
       Response$HeadersListener
-      Response$SuccessListener
-      Response$AsyncContentListener
-      Result)
+      Response$AsyncContentListener)
     (org.eclipse.jetty.client.http
       HttpClientTransportOverHTTP)
     (java.util.concurrent TimeUnit)
@@ -104,7 +102,7 @@
        (reduction-function result (decode-body chunk as))))))
 
 (defn- make-response
-   [^HttpRequest request ^Response response body-ch error-chan trailers-ch]
+   [request ^Response response body-ch error-chan trailers-ch]
    (let [headers (util/http-fields->map (.getHeaders response))
          status (.getStatus response)]
      {:body body-ch
@@ -112,7 +110,8 @@
       :headers headers
       :request request
       :status status
-      :trailers (when (util/trailers-supported? (some-> request .getVersion .asString) headers)
+      :trailers (when (and (instance? HttpRequest request)
+                           (util/trailers-supported? (some-> request .getVersion .asString) headers))
                   trailers-ch)}))
 
 (defprotocol PRequest
@@ -323,7 +322,7 @@
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
         trailers-ch (async/promise-chan)
-        ^HttpRequest request (.newRequest client ^String url)]
+        ^Request request (.newRequest client ^String url)]
 
     (some->> version
       HttpVersion/fromString
@@ -369,8 +368,8 @@
            untyped-content-provider
            (.content request)))
 
-    (when trailers-fn
-      (.trailers request (util/trailers-fn->supplier trailers-fn)))
+    (when (and trailers-fn (instance? HttpRequest request))
+      (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))
 
     (doseq [[k v] headers]
       (if (coll? v)
@@ -379,8 +378,7 @@
         (.header request (name k) (str v))))
 
     (when content-type
-      (.header request "Content-Type"
-               (name content-type)))
+      (.header request "Content-Type" (name content-type)))
 
     (when auth
       (.apply auth request))
