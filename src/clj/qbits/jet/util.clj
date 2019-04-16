@@ -42,10 +42,8 @@
 (defn trailers-ch->supplier
   [trailers-ch]
   (when trailers-ch
-    (let [trailers-atom (atom {})]
-      (async/go
-        (when-let [trailers (async/<! trailers-ch)]
-          (reset! trailers-atom trailers)))
-      (reify Supplier
-        (get [_] (map->http-fields @trailers-atom))))))
+    (reify Supplier
+      (get [_]
+        (let [trailers (or (async/<!! trailers-ch) {})]
+          (map->http-fields trailers))))))
 
