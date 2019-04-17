@@ -305,6 +305,7 @@
   [^HttpClient client
    {:keys [url method query-string form-params headers body
            content-type
+           abort-ch
            accept
            as
            idle-timeout
@@ -334,6 +335,11 @@
     (some->> version
       HttpVersion/fromString
       (.version request))
+
+    (when abort-ch
+      (async/go
+        (when-let [cause (async/<! abort-ch)]
+          (.abort request cause))))
 
     (.followRedirects request follow-redirects?)
 
