@@ -1,18 +1,19 @@
 (ns qbits.jet.client.http
   (:refer-clojure :exclude [get])
   (:require
-   [clojure.core.async :as async]
-   [clojure.core.async.impl.protocols :as protocols]
-   [qbits.jet.client.ssl :as ssl]
-   [qbits.jet.client.auth :as auth]
-   [qbits.jet.client.cookies :as cookies]
-   [clojure.string :as string]
-   [cheshire.core :as json]
-   [clojure.xml :as xml])
+    [cheshire.core :as json]
+    [clojure.core.async :as async]
+    [clojure.core.async.impl.protocols :as protocols]
+    [clojure.xml :as xml]
+    [qbits.jet.client.ssl :as ssl]
+    [qbits.jet.client.auth :as auth]
+    [qbits.jet.client.cookies :as cookies]
+    [qbits.jet.util :as util])
   (:import
     (org.eclipse.jetty.client
       HttpClient
-      HttpRequest)
+      HttpRequest
+      HttpResponse)
     (org.eclipse.jetty.util Fields)
     (org.eclipse.jetty.client.util
       StringContentProvider
@@ -24,19 +25,17 @@
       FormContentProvider
       MultiPartContentProvider)
     (org.eclipse.jetty.http
-      HttpFields
       HttpField
       HttpVersion)
     (org.eclipse.jetty.client.api
       Authentication$Result
       ContentProvider
+      Request
       Request$FailureListener
+      Response
       Response$CompleteListener
       Response$HeadersListener
-      Request
-      Response
-      Response$AsyncContentListener
-      Result)
+      Response$AsyncContentListener)
     (org.eclipse.jetty.client.http
       HttpClientTransportOverHTTP)
     (java.util.concurrent TimeUnit)
@@ -103,23 +102,17 @@
        (reduction-function result (decode-body chunk as))))))
 
 (defn- make-response
-   [request ^Response response body-ch error-chan]
-   (let [headers (reduce (fn [m ^HttpField h]
-                             (let [k (string/lower-case (.getName h))
-                                   v (.getValue h)]
-                                  (if (contains? m k)
-                                    (if (coll? (m k))
-                                      (assoc m k (conj (m k) v))
-                                      (assoc m k [(m k) v]))
-                                    (assoc m k v))))
-                         {}
-                         ^HttpFields (.getHeaders response))
+   [request ^Response response body-ch error-chan trailers-ch]
+   (let [headers (util/http-fields->map (.getHeaders response))
          status (.getStatus response)]
      {:body body-ch
       :error-chan error-chan
       :headers headers
       :request request
-      :status status}))
+      :status status
+      :trailers (when (and (instance? HttpRequest request)
+                           (util/trailers-supported? (some-> request .getVersion .asString) headers))
+                  trailers-ch)}))
 
 (defprotocol PRequest
   (encode-chunk [x])
@@ -197,8 +190,7 @@
      :basic (auth/basic-auth url realm user password))))
 
 (defn ^HttpClient client
-  ([{:keys [url
-            address-resolution-timeout
+  ([{:keys [address-resolution-timeout
             connect-timeout
             executor
             follow-redirects?
@@ -303,7 +295,7 @@
 
 (defn request
   [^HttpClient client
-   {:keys [url method query-string form-params headers body
+   {:keys [url method query-string form-params headers body trailers-fn
            content-type
            accept
            as
@@ -329,6 +321,7 @@
                             (if fold-chunked-response?
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
+        trailers-ch (async/promise-chan)
         ^Request request (.newRequest client ^String url)]
 
     (some->> version
@@ -375,6 +368,9 @@
            untyped-content-provider
            (.content request)))
 
+    (when (and trailers-fn (instance? HttpRequest request))
+      (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))
+
     (doseq [[k v] headers]
       (if (coll? v)
         (doseq [v' v]
@@ -382,8 +378,7 @@
         (.header request (name k) (str v))))
 
     (when content-type
-      (.header request "Content-Type"
-               (name content-type)))
+      (.header request "Content-Type" (name content-type)))
 
     (when auth
       (.apply auth request))
@@ -402,7 +397,7 @@
 
     (.onResponseContentAsync request
                              (reify Response$AsyncContentListener
-                               (onContent [this response bytebuffer callback]
+                               (onContent [_ _ bytebuffer callback]
                                  (if (protocols/closed? body-ch)
                                    (let [ex (IOException. "Body channel closed unexpectedly")]
                                      (.failed callback ex)
@@ -412,8 +407,8 @@
 
     (.onResponseHeaders request
                         (reify Response$HeadersListener
-                          (onHeaders [this response]
-                            (async/put! ch (make-response request response body-ch error-ch)))))
+                          (onHeaders [_ response]
+                            (async/put! ch (make-response request response body-ch error-ch trailers-ch)))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
@@ -423,10 +418,15 @@
     (.send request
            (reify Response$CompleteListener
              (onComplete [_ result]
-               (when (not (.isSucceeded ^Result result))
+               (when (not (.isSucceeded result))
                    (async/put! ch {:error (.getFailure result)})
                    (async/put! error-ch {:error (.getFailure result)}))
+               (when-let [response (.getResponse result)]
+                 (when (instance? HttpResponse response)
+                   (when-let [trailers (.getTrailers ^HttpResponse response)]
+                     (async/>!! trailers-ch (util/http-fields->map trailers)))))
                (async/close! body-ch)
+               (async/close! trailers-ch)
                (async/close! ch)
                (async/close! error-ch))))
     ch))
