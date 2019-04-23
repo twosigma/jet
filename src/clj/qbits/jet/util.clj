@@ -33,6 +33,12 @@
   (or (= (.asString HttpVersion/HTTP_2) request-protocol)
       (and (nil? content-length) (= transfer-encoding "chunked"))))
 
+(defn trailers->supplier
+  [trailers]
+  (when trailers
+    (reify Supplier
+      (get [_] (map->http-fields trailers)))))
+
 (defn trailers-fn->supplier
   [trailers-fn]
   (when trailers-fn

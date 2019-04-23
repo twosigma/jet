@@ -45,7 +45,8 @@
       ByteArrayInputStream
       ByteArrayOutputStream
       IOException)
-    (clojure.lang Sequential)))
+    (clojure.lang Sequential)
+    (java.util Iterator)))
 
 (def ^:const array-class (class (clojure.core/byte-array 0)))
 (def default-buffer-size (* 1024 1024 4))
@@ -281,15 +282,29 @@
     (.setAccessible true)
     (.set request query-string)))
 
+(defn- wrap-iterator
+  [on-last-chunk ^Iterator iterator]
+  (reify
+    Iterator
+    (hasNext [_]
+      (let [more? (.hasNext iterator)]
+        (when-not more?
+          (on-last-chunk))
+        more?))
+    (next [_]
+      (.next iterator))))
+
 (defn- untyped-content-provider
-  [^ContentProvider content-provider]
+  [on-last-chunk ^ContentProvider content-provider]
   (reify
     ContentProvider
     ;; interface ContentProvider methods
     (getLength [_] (.getLength content-provider))
     (isReproducible [_] (.isReproducible content-provider))
     ;; interface Iterable<ByteBuffer> methods
-    (iterator [_] (.iterator content-provider))
+    (iterator [_]
+      (cond->> (.iterator content-provider)
+        on-last-chunk (wrap-iterator on-last-chunk)))
     (forEach [_ action] (.forEach content-provider action))
     (spliterator [_] (.spliterator content-provider))))
 
@@ -323,7 +338,8 @@
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
         trailers-ch (async/promise-chan)
-        ^Request request (.newRequest client ^String url)]
+        ^Request request (.newRequest client ^String url)
+        trailers-supported? (and trailers-fn (instance? HttpRequest request))]
 
     (some->> version
       HttpVersion/fromString
@@ -369,13 +385,23 @@
                             (.close provider)
                             provider)))
 
-    (when body
+    (if (and body (= (.asString HttpVersion/HTTP_2) version))
+      ;; HTTP/2 requests with a body need the trailer to set be set as late as possible
       (->> (encode-body body)
-           untyped-content-provider
-           (.content request)))
-
-    (when (and trailers-fn (instance? HttpRequest request))
-      (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))
+           (untyped-content-provider
+             (fn on-body-content-read []
+               (when trailers-supported?
+                 (when-let [trailers (trailers-fn)]
+                   (.trailers ^HttpRequest request (util/trailers->supplier trailers))))))
+           (.content request))
+      ;; HTTP/1.1 requests or requests without a body need the trailer set eagerly
+      (do
+        (when body
+          (->> (encode-body body)
+               (untyped-content-provider nil)
+               (.content request)))
+        (when trailers-supported?
+          (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))))
 
     (doseq [[k v] headers]
       (if (coll? v)
