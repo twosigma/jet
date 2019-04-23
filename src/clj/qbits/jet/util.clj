@@ -37,13 +37,15 @@
   [trailers-fn]
   (when trailers-fn
     (reify Supplier
-      (get [_] (map->http-fields (trailers-fn))))))
+      (get [_]
+        (when-let [trailers (trailers-fn)]
+          (map->http-fields trailers))))))
 
 (defn trailers-ch->supplier
   [trailers-ch]
   (when trailers-ch
     (reify Supplier
       (get [_]
-        (let [trailers (or (async/<!! trailers-ch) {})]
+        (when-let [trailers (async/<!! trailers-ch)]
           (map->http-fields trailers))))))
 
