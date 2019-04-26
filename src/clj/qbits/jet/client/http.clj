@@ -45,7 +45,8 @@
       ByteArrayInputStream
       ByteArrayOutputStream
       IOException)
-    (clojure.lang Sequential)))
+    (clojure.lang Sequential)
+    (java.util Iterator)))
 
 (def ^:const array-class (class (clojure.core/byte-array 0)))
 (def default-buffer-size (* 1024 1024 4))
@@ -281,15 +282,33 @@
     (.setAccessible true)
     (.set request query-string)))
 
+(defn- wrap-iterator
+  [on-last-chunk ^Iterator iterator]
+  (reify
+    Iterator
+    (hasNext [_]
+      (let [more? (.hasNext iterator)]
+        (when-not more?
+          (on-last-chunk))
+        more?))
+    (next [_]
+      ;; We rely on the caller (and that is currently true in Jetty) always checking
+      ;; more data is available by having called hasNext() previously.
+      (.next iterator))))
+
 (defn- untyped-content-provider
-  [^ContentProvider content-provider]
+  [on-last-chunk ^ContentProvider content-provider]
   (reify
     ContentProvider
     ;; interface ContentProvider methods
     (getLength [_] (.getLength content-provider))
     (isReproducible [_] (.isReproducible content-provider))
     ;; interface Iterable<ByteBuffer> methods
-    (iterator [_] (.iterator content-provider))
+    (iterator [_]
+      (cond->> (.iterator content-provider)
+        ;; we wrap the iterator since Jetty doesn;t currently provide a listener for
+        ;; when the request body has been read.
+        on-last-chunk (wrap-iterator on-last-chunk)))
     (forEach [_ action] (.forEach content-provider action))
     (spliterator [_] (.spliterator content-provider))))
 
@@ -323,7 +342,8 @@
                               (fold-chunks+decode-xform as fold-chunked-response-buffer-size)
                               (decode-chunk-xform as)))
         trailers-ch (async/promise-chan)
-        ^Request request (.newRequest client ^String url)]
+        ^Request request (.newRequest client ^String url)
+        trailers-supported? (and trailers-fn (instance? HttpRequest request))]
 
     (some->> version
       HttpVersion/fromString
@@ -369,13 +389,25 @@
                             (.close provider)
                             provider)))
 
-    (when body
+    (if (and body (= (.asString HttpVersion/HTTP_2) version))
+      ;; HTTP/2 requests with a body need the trailer to set be set as late as possible
+      ;; This allows us to avoid sending an empty terminating trailer frame if there are no trailers to send.
       (->> (encode-body body)
-           untyped-content-provider
-           (.content request)))
-
-    (when (and trailers-fn (instance? HttpRequest request))
-      (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))
+           (untyped-content-provider
+             (fn on-request-body-content-read []
+               (when trailers-supported?
+                 (when-let [trailers (trailers-fn)]
+                   (.trailers ^HttpRequest request (util/trailers->supplier trailers))))))
+           (.content request))
+      ;; For HTTP/1.1 requests or requests without a body, we need the trailer set eagerly
+      ;; For HTTP/2 requests, we may end up sending an empty trailer frame if the body is empty
+      (do
+        (when body
+          (->> (encode-body body)
+               (untyped-content-provider nil)
+               (.content request)))
+        (when trailers-supported?
+          (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))))
 
     (doseq [[k v] headers]
       (if (coll? v)
