@@ -11,10 +11,13 @@
     [qbits.jet.util :as util])
   (:import
     (org.eclipse.jetty.client
+      AsyncContentProvider
       HttpClient
       HttpRequest
       HttpResponse)
-    (org.eclipse.jetty.util Fields)
+    (org.eclipse.jetty.util
+      Callback
+      Fields)
     (org.eclipse.jetty.client.util
       StringContentProvider
       BytesContentProvider
@@ -285,6 +288,13 @@
 (defn- wrap-iterator
   [on-last-chunk ^Iterator iterator]
   (reify
+    Callback
+    (succeeded [_]
+      (when (instance? Callback iterator)
+        (.succeeded ^Callback iterator)))
+    (failed [_ throwable]
+      (when (instance? Callback iterator)
+        (.failed ^Callback iterator throwable)))
     Iterator
     (hasNext [_]
       (let [more? (.hasNext iterator)]
@@ -298,19 +308,36 @@
 
 (defn- untyped-content-provider
   [on-last-chunk ^ContentProvider content-provider]
-  (reify
-    ContentProvider
-    ;; interface ContentProvider methods
-    (getLength [_] (.getLength content-provider))
-    (isReproducible [_] (.isReproducible content-provider))
-    ;; interface Iterable<ByteBuffer> methods
-    (iterator [_]
-      (cond->> (.iterator content-provider)
-        ;; we wrap the iterator since Jetty doesn;t currently provide a listener for
-        ;; when the request body has been read.
-        on-last-chunk (wrap-iterator on-last-chunk)))
-    (forEach [_ action] (.forEach content-provider action))
-    (spliterator [_] (.spliterator content-provider))))
+  (if (instance? AsyncContentProvider content-provider)
+    (reify
+      AsyncContentProvider
+      ;; interface AsyncContentProvider methods
+      (setListener [_ listener]
+        (.setListener ^AsyncContentProvider content-provider listener))
+      ;; interface ContentProvider methods
+      (getLength [_] (.getLength content-provider))
+      (isReproducible [_] (.isReproducible content-provider))
+      ;; interface Iterable<ByteBuffer> methods
+      (iterator [_]
+        (cond->> (.iterator content-provider)
+          ;; we wrap the iterator since Jetty doesn't currently provide a listener for
+          ;; when the request body has been read.
+          on-last-chunk (wrap-iterator on-last-chunk)))
+      (forEach [_ action] (.forEach content-provider action))
+      (spliterator [_] (.spliterator content-provider)))
+    (reify
+      ContentProvider
+      ;; interface ContentProvider methods
+      (getLength [_] (.getLength content-provider))
+      (isReproducible [_] (.isReproducible content-provider))
+      ;; interface Iterable<ByteBuffer> methods
+      (iterator [_]
+        (cond->> (.iterator content-provider)
+          ;; we wrap the iterator since Jetty doesn't currently provide a listener for
+          ;; when the request body has been read.
+          on-last-chunk (wrap-iterator on-last-chunk)))
+      (forEach [_ action] (.forEach content-provider action))
+      (spliterator [_] (.spliterator content-provider)))))
 
 (defn request
   [^HttpClient client
@@ -435,12 +462,12 @@
 
     (.onResponseContentAsync request
                              (reify Response$AsyncContentListener
-                               (onContent [_ _ bytebuffer callback]
+                               (onContent [_ _ byte-buffer callback]
                                  (if (protocols/closed? body-ch)
                                    (let [ex (IOException. "Body channel closed unexpectedly")]
                                      (.failed callback ex)
                                      (.abort request ex))
-                                   (async/put! body-ch (byte-buffer->bytes bytebuffer)
+                                   (async/put! body-ch (byte-buffer->bytes byte-buffer)
                                                (fn [_] (.succeeded callback)))))))
 
     (.onResponseHeaders request
