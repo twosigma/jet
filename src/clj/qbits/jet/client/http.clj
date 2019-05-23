@@ -195,6 +195,7 @@
 
 (defn ^HttpClient client
   ([{:keys [address-resolution-timeout
+            client-name
             connect-timeout
             executor
             follow-redirects?
@@ -228,6 +229,9 @@
 
      (when address-resolution-timeout
        (.setAddressResolutionTimeout client (long address-resolution-timeout)))
+
+     (when client-name
+       (.setName client client-name))
 
      (when connect-timeout
        (.setConnectTimeout client (long connect-timeout)))
