@@ -14,7 +14,8 @@
       AsyncContentProvider
       HttpClient
       HttpRequest
-      HttpResponse)
+      HttpResponse
+      Synchronizable)
     (org.eclipse.jetty.util
       Callback
       Fields)
@@ -291,24 +292,31 @@
 
 (defn- wrap-iterator
   [on-last-chunk ^Iterator iterator]
-  (reify
-    Callback
-    (succeeded [_]
-      (when (instance? Callback iterator)
-        (.succeeded ^Callback iterator)))
-    (failed [_ throwable]
-      (when (instance? Callback iterator)
-        (.failed ^Callback iterator throwable)))
-    Iterator
-    (hasNext [_]
-      (let [more? (.hasNext iterator)]
-        (when-not more?
-          (on-last-chunk))
-        more?))
-    (next [_]
-      ;; We rely on the caller (and that is currently true in Jetty) always checking
-      ;; more data is available by having called hasNext() previously.
-      (.next iterator))))
+  (let [default-lock-object (Object.)]
+    (reify
+      Callback
+      (succeeded [_]
+        (when (instance? Callback iterator)
+          (.succeeded ^Callback iterator)))
+      (failed [_ throwable]
+        (when (instance? Callback iterator)
+          (.failed ^Callback iterator throwable)))
+      Iterator
+      (hasNext [_]
+        (let [more? (.hasNext iterator)]
+          (when-not more?
+            (on-last-chunk))
+          more?))
+      (next [_]
+        ;; We rely on the caller (and that is currently true in Jetty) always checking
+        ;; more data is available by having called hasNext() previously.
+        (.next iterator))
+      Synchronizable
+      ;; Mimic DeferredContentProviderIterator which implements Synchronizable
+      (getLock [_]
+        (if (instance? Synchronizable iterator)
+          (.getLock ^Synchronizable iterator)
+          default-lock-object)))))
 
 (defn- untyped-content-provider
   [on-last-chunk ^ContentProvider content-provider]
