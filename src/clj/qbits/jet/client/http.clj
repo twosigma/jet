@@ -16,6 +16,7 @@
       HttpRequest
       HttpResponse)
     (org.eclipse.jetty.util
+      BufferUtil
       Callback
       Fields)
     (org.eclipse.jetty.client.util
@@ -23,6 +24,7 @@
       BytesContentProvider
       ByteBufferContentProvider
       DeferredContentProvider
+      DeferredContentProvider$DeferredContentProviderIterator
       InputStreamContentProvider
       PathContentProvider
       FormContentProvider
@@ -49,7 +51,9 @@
       ByteArrayOutputStream
       IOException)
     (clojure.lang Sequential)
-    (java.util Iterator)))
+    (java.util
+      Iterator
+      NoSuchElementException)))
 
 (def ^:const array-class (class (clojure.core/byte-array 0)))
 (def default-buffer-size (* 1024 1024 4))
@@ -166,10 +170,12 @@
       (async/go
         (loop []
           (if-let [chunk (async/<! ch)]
-            (do (.offer ^DeferredContentProvider cp
-                        (encode-chunk chunk))
+            (do (.offer cp (encode-chunk chunk))
                 (recur))
-            (.close ^DeferredContentProvider cp))))
+            ;; eagerly offer empty buffer to reduce chances to data race and NoSuchElementException
+            ;; https://github.com/eclipse/jetty.project/issues/3753
+            (do (.offer cp BufferUtil/EMPTY_BUFFER)
+                (.close ^DeferredContentProvider cp)))))
       cp))
 
   Object
@@ -291,24 +297,45 @@
 
 (defn- wrap-iterator
   [on-last-chunk ^Iterator iterator]
-  (reify
-    Callback
-    (succeeded [_]
-      (when (instance? Callback iterator)
-        (.succeeded ^Callback iterator)))
-    (failed [_ throwable]
-      (when (instance? Callback iterator)
-        (.failed ^Callback iterator throwable)))
-    Iterator
-    (hasNext [_]
-      (let [more? (.hasNext iterator)]
-        (when-not more?
-          (on-last-chunk))
-        more?))
-    (next [_]
-      ;; We rely on the caller (and that is currently true in Jetty) always checking
-      ;; more data is available by having called hasNext() previously.
-      (.next iterator))))
+  ;; https://github.com/eclipse/jetty.project/issues/3753
+  ;; There is a chance of data race in org.eclipse.jetty.client.HttpContent.advance(java.util.Iterator<java.nio.ByteBuffer>)
+  ;; as call to DeferredContentProviderIterator.next() can throw a NoSuchElementException following a call to
+  ;; DeferredContentProviderIterator.hasNext() which returned true.
+  ;; We cannot totally avoid the race as the locks are used on individual calls in the iterator/provider
+  ;; where as it is needed in the advance() method across calls on the iterator.
+  ;; As a result we patch the wrapper iterator to detect and handle this scenario.
+  (let [more-elements-atom (atom false)
+        iterator-lock (Object.)]
+    (reify
+      Callback
+      (succeeded [_]
+        (when (instance? Callback iterator)
+          (.succeeded ^Callback iterator)))
+      (failed [_ throwable]
+        (when (instance? Callback iterator)
+          (.failed ^Callback iterator throwable)))
+      Iterator
+      (hasNext [_]
+        (locking iterator-lock
+          (let [more? (.hasNext iterator)]
+            (reset! more-elements-atom more?)
+            (when-not more?
+              (on-last-chunk))
+            more?)))
+      (next [_]
+        ;; We rely on the caller (and that is currently true in Jetty) always checking
+        ;; more data is available by having called hasNext() previously.
+        (locking iterator-lock
+          (try
+            (.next iterator)
+            (catch NoSuchElementException ex
+              (if (and @more-elements-atom
+                       (instance? DeferredContentProvider$DeferredContentProviderIterator iterator))
+                ;; gobble the exception due to the data race
+                BufferUtil/EMPTY_BUFFER
+                (throw ex)))
+            (finally
+              (reset! more-elements-atom false))))))))
 
 (defn- untyped-content-provider
   [on-last-chunk ^ContentProvider content-provider]
