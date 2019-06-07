@@ -198,6 +198,8 @@
 (defn ctrl-listener
   [ctrl]
   (reify AsyncListener
+    (onStartAsync [this event]
+      (comment do nothing))
     (onError [this e]
       (async/put! ctrl [::error e]))
     (onTimeout [this e]
@@ -208,6 +210,8 @@
 (defn async-listener
   [ch]
   (reify AsyncListener
+    (onStartAsync [this event]
+      (comment do nothing))
     (onError [this e]
       (async/close! ch))
     (onTimeout [this e]
