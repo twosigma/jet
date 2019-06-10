@@ -139,9 +139,9 @@
   (try
     (-write-stream! x stream)
     (catch Exception e
-      (let [x (ex-info "Couldnt' write to stream " {:exception e})]
-        (async/put! (:ctrl request-map) [::error x])
-        (throw x)))))
+      (let [ex (ex-info "Couldn't write to stream" {} e)]
+        (async/put! (:ctrl request-map) [::error ex])
+        (throw ex)))))
 
 (extend-protocol PBodyWritable
   (Class/forName "[B") ; Byte array
@@ -200,23 +200,25 @@
   (reify AsyncListener
     (onStartAsync [this event]
       (comment do nothing))
-    (onError [this e]
-      (async/put! ctrl [::error e]))
-    (onTimeout [this e]
-      (async/put! ctrl [::timeout e]))
-    (onComplete [this e]
+    (onError [this event]
+      (async/put! ctrl [::error (.getThrowable event)]))
+    (onTimeout [this event]
+      (async/put! ctrl [::timeout (.getThrowable event)]))
+    (onComplete [this event]
       (async/close! ctrl))))
 
 (defn async-listener
-  [ch]
+  [ctrl ch]
   (reify AsyncListener
     (onStartAsync [this event]
       (comment do nothing))
-    (onError [this e]
+    (onError [this event]
+      (async/put! ctrl [::error (.getThrowable event)])
       (async/close! ch))
-    (onTimeout [this e]
+    (onTimeout [this event]
+      (async/put! ctrl [::timeout (.getThrowable event)])
       (async/close! ch))
-    (onComplete [this e]
+    (onComplete [this event]
       (async/close! ch))))
 
 (defn ^AsyncContext async-context
@@ -230,16 +232,22 @@
       (.setTimeout 0)
       (.addListener (ctrl-listener ctrl))))
   (doto (.getAsyncContext servlet-request)
-    (.addListener (async-listener ch))))
+    (.addListener (async-listener ctrl ch))))
 
 (defn set-body!
   [servlet-response
-   request-map
+   {:keys [ctrl] :as request-map}
    body]
   (if (chan? body)
     (let [ctx (async-context request-map body)]
       (async/take! (set-response-body! servlet-response request-map body)
-                   (fn [_] (.complete ctx))))
+                   (fn [_]
+                     (try
+                       (.complete ctx)
+                       (catch Exception ex
+                         (when-not (async/put! ctrl [::error ex])
+                           ;; rethrow the exception only if it is not sent to ctrl chan
+                           (throw ex)))))))
     (do
       (set-response-body! servlet-response request-map body)
       (flush-buffer! servlet-response))))
@@ -264,8 +272,8 @@
                    #(do
                       (try
                         (-update-response % request-map)
-                        (catch Exception e
-                          (-> request-map :ctrl (async/put! [::error e]))))
+                        (catch Exception ex
+                          (-> request-map :ctrl (async/put! [::error ex]))))
                       (when-not (chan? (:body %))
                         (.complete ctx))))))
 
