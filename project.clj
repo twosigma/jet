@@ -1,4 +1,4 @@
-(def jetty-version "9.4.18.v20190429")
+(def jetty-version "9.4.19.v20190610")
 (defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
