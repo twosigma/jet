@@ -151,7 +151,8 @@ Derived from ring.adapter.jetty"
       :want (.setWantClientAuth context true)
       nil)
     (when http2?
-      (.setCipherComparator context HTTP2Cipher/COMPARATOR))
+      (.setCipherComparator context HTTP2Cipher/COMPARATOR)
+      (.setUseCipherSuitesOrder context true))
     context))
 
 (defn ^HttpCompliance any->parser-compliance
