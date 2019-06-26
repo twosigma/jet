@@ -47,11 +47,19 @@
         (when-let [trailers (trailers-fn)]
           (map->http-fields trailers))))))
 
+(defn- map->non-empty-http-fields
+  "Ensures that we return on-empty http fields as trailers in responses.
+   This is to prevent issues while using clients who do not accept empty trailers in responses."
+  ;; TODO remove when https://github.com/eclipse/jetty.project/issues/3829 is fixed and empty trailer frames are not sent.
+  [trailers-map]
+  (if (seq trailers-map)
+    (map->http-fields trailers-map)
+    (map->http-fields {"x-waiter-trailer-reason" "ensures-non-empty-trailers"})))
+
 (defn trailers-ch->supplier
   [trailers-ch]
   (when trailers-ch
     (reify Supplier
       (get [_]
-        (when-let [trailers (async/<!! trailers-ch)]
-          (map->http-fields trailers))))))
+        (map->non-empty-http-fields (async/<!! trailers-ch))))))
 
