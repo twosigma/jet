@@ -428,7 +428,7 @@
                             (.close provider)
                             provider)))
 
-    (if (and body (= (.asString HttpVersion/HTTP_2) version))
+    (if (and body (util/http2-request? version))
       ;; HTTP/2 requests with a body need the trailer to set be set as late as possible
       ;; This allows us to avoid sending an empty terminating trailer frame if there are no trailers to send.
       (->> (encode-body body)

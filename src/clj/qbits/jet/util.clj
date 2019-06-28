@@ -28,9 +28,13 @@
         (.add hfs (name k) (str v))))
     hfs))
 
+(defn http2-request?
+  [^String request-protocol]
+  (= (.asString HttpVersion/HTTP_2) request-protocol))
+
 (defn trailers-supported?
   [^String request-protocol {:strs [content-length transfer-encoding]}]
-  (or (= (.asString HttpVersion/HTTP_2) request-protocol)
+  (or (http2-request? request-protocol)
       (and (nil? content-length) (= transfer-encoding "chunked"))))
 
 (defn trailers->supplier
