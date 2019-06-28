@@ -390,8 +390,12 @@
 
     (when abort-ch
       (async/go
-        (when-let [cause (async/<! abort-ch)]
-          (.abort request cause))))
+        (loop []
+          (when-let [message (async/<! abort-ch)]
+            (let [[cause response-chan] message
+                  abort-result (.abort request cause)]
+              (async/put! response-chan abort-result)
+              (recur))))))
 
     (.followRedirects request follow-redirects?)
 
@@ -502,6 +506,8 @@
                  (when (instance? HttpResponse response)
                    (when-let [trailers (.getTrailers ^HttpResponse response)]
                      (async/>!! trailers-ch (util/http-fields->map trailers)))))
+               (when abort-ch
+                 (async/close! abort-ch))
                (async/close! body-ch)
                (async/close! trailers-ch)
                (async/close! ch)
