@@ -394,7 +394,7 @@
           (when-let [message (async/<! abort-ch)]
             (let [[cause response-chan] message
                   abort-result (.abort request cause)]
-              (async/put! response-chan abort-result)
+              (async/put! response-chan [abort-result (.getAbortCause request)])
               (recur))))))
 
     (.followRedirects request follow-redirects?)
