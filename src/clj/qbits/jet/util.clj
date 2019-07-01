@@ -28,9 +28,13 @@
         (.add hfs (name k) (str v))))
     hfs))
 
+(defn http2-request?
+  [^String request-protocol]
+  (= (.asString HttpVersion/HTTP_2) request-protocol))
+
 (defn trailers-supported?
   [^String request-protocol {:strs [content-length transfer-encoding]}]
-  (or (= (.asString HttpVersion/HTTP_2) request-protocol)
+  (or (http2-request? request-protocol)
       (and (nil? content-length) (= transfer-encoding "chunked"))))
 
 (defn trailers->supplier
@@ -48,10 +52,15 @@
           (map->http-fields trailers))))))
 
 (defn trailers-ch->supplier
-  [trailers-ch]
+  [trailers-ch http2?]
   (when trailers-ch
     (reify Supplier
       (get [_]
-        (when-let [trailers (async/<!! trailers-ch)]
-          (map->http-fields trailers))))))
-
+        (let [trailers-map (async/<!! trailers-ch)]
+          (if (seq trailers-map)
+            (map->http-fields trailers-map)
+            (when http2?
+              ;; Ensures that we return on-empty http fields as trailers in responses.
+              ;; This is to prevent issues while using http2 clients who do not accept empty trailers in responses.
+              ;; TODO remove when https://github.com/eclipse/jetty.project/issues/3829 is fixed and empty trailer frames are not sent.
+              (map->http-fields {"x-waiter-trailer-reason" "ensures-non-empty-trailers"}))))))))
