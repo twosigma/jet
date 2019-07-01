@@ -107,10 +107,11 @@
        (reduction-function result (decode-body chunk as))))))
 
 (defn- make-response
-   [request ^Response response body-ch error-chan trailers-ch]
+   [request ^Response response abort-ch body-ch error-chan trailers-ch]
    (let [headers (util/http-fields->map (.getHeaders response))
          status (.getStatus response)]
-     {:body body-ch
+     {:abort-ch abort-ch
+      :body body-ch
       :error-chan error-chan
       :headers headers
       :request request
@@ -351,6 +352,20 @@
       (forEach [_ action] (.forEach content-provider action))
       (spliterator [_] (.spliterator content-provider)))))
 
+(defn- track-response-trailers
+  [response-trailers-ch response-body-ch close-request-channels! response]
+  (async/go
+    (loop []
+      ;; iterate every second and check if trailers are available
+      (async/<! (async/timeout 1000))
+      (let [trailers (.getTrailers ^HttpResponse response)]
+        (if trailers
+          (do
+            (async/>! response-trailers-ch (util/http-fields->map trailers))
+            (close-request-channels!))
+          (when-not (protocols/closed? response-body-ch)
+            (recur)))))))
+
 (defn request
   [^HttpClient client
    {:keys [url method query-string form-params headers body trailers-fn
@@ -382,7 +397,14 @@
                               (decode-chunk-xform as)))
         trailers-ch (async/promise-chan)
         ^Request request (.newRequest client ^String url)
-        trailers-supported? (and trailers-fn (instance? HttpRequest request))]
+        trailers-supported? (and trailers-fn (instance? HttpRequest request))
+        close-request-channels! (fn close-request-channels! []
+                                 (when abort-ch
+                                   (async/close! abort-ch))
+                                 (async/close! body-ch)
+                                 (async/close! trailers-ch)
+                                 (async/close! ch)
+                                 (async/close! error-ch))]
 
     (some->> version
       HttpVersion/fromString
@@ -489,7 +511,8 @@
     (.onResponseHeaders request
                         (reify Response$HeadersListener
                           (onHeaders [_ response]
-                            (async/put! ch (make-response request response body-ch error-ch trailers-ch)))))
+                            (async/put! ch (make-response request response abort-ch body-ch error-ch trailers-ch))
+                            (track-response-trailers trailers-ch body-ch close-request-channels! response))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
@@ -506,12 +529,7 @@
                  (when (instance? HttpResponse response)
                    (when-let [trailers (.getTrailers ^HttpResponse response)]
                      (async/>!! trailers-ch (util/http-fields->map trailers)))))
-               (when abort-ch
-                 (async/close! abort-ch))
-               (async/close! body-ch)
-               (async/close! trailers-ch)
-               (async/close! ch)
-               (async/close! error-ch))))
+               (close-request-channels!))))
     ch))
 
 (defn get
