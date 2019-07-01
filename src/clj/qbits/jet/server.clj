@@ -101,10 +101,11 @@ Derived from ring.adapter.jetty"
 
 (defn- http-config
   [{:as options
-    :keys [ssl-port secure-scheme output-buffer-size request-header-size
+    :keys [blocking-timeout ssl-port secure-scheme output-buffer-size request-header-size
            response-header-size send-server-version? send-date-header?
            header-cache-size]
-    :or {ssl-port 443
+    :or {blocking-timeout 3600
+         ssl-port 443
          secure-scheme "https"
          output-buffer-size 32768
          request-header-size 8192
@@ -114,6 +115,7 @@ Derived from ring.adapter.jetty"
          header-cache-size 512}}]
   "Creates jetty http configurator"
   (doto (HttpConfiguration.)
+    (.setBlockingTimeout blocking-timeout)
     (.setSecureScheme secure-scheme)
     (.setSecurePort ssl-port)
     (.setOutputBufferSize output-buffer-size)
