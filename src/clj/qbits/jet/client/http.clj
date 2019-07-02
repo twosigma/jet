@@ -516,7 +516,8 @@
                         (reify Response$HeadersListener
                           (onHeaders [_ response]
                             (async/put! ch (make-response request response abort-ch body-ch error-ch trailers-ch))
-                            (track-response-trailers trailers-ch body-ch close-request-channels! response))))
+                            (when (util/http2-request? version)
+                              (track-response-trailers trailers-ch body-ch close-request-channels! response)))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
