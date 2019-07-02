@@ -353,6 +353,9 @@
       (spliterator [_] (.spliterator content-provider)))))
 
 (defn- track-response-trailers
+  "Asynchronously loops and looks for presence of trailers in the response.
+   When available, they are propagated to the trailers channel and other request channels closed.
+   Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this."
   [response-trailers-ch response-body-ch close-request-channels! response]
   (async/go
     (loop []
@@ -413,6 +416,7 @@
     (when abort-ch
       (async/go
         (loop []
+          ;; continuously process any abort requests
           (when-let [message (async/<! abort-ch)]
             (let [[cause response-chan] message
                   abort-result (.abort request cause)]
