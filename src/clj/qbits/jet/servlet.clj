@@ -275,7 +275,10 @@
                         (catch Exception ex
                           (-> request-map :ctrl (async/put! [::error ex]))))
                       (when-not (chan? (:body %))
-                        (.complete ctx))))))
+                        (try
+                          (.complete ctx)
+                          (catch Exception ex
+                            (-> request-map :ctrl (async/put! [::error ex])))))))))
 
   clojure.lang.IPersistentMap
   (-update-response [response-map request-map]
