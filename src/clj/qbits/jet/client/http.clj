@@ -402,12 +402,12 @@
         ^Request request (.newRequest client ^String url)
         trailers-supported? (and trailers-fn (instance? HttpRequest request))
         close-request-channels! (fn close-request-channels! []
-                                 (when abort-ch
-                                   (async/close! abort-ch))
-                                 (async/close! body-ch)
-                                 (async/close! trailers-ch)
-                                 (async/close! ch)
-                                 (async/close! error-ch))
+                                  (async/close! error-ch)
+                                  (async/close! body-ch)
+                                  (async/close! trailers-ch)
+                                  (when abort-ch
+                                    (async/close! abort-ch))
+                                  (async/close! ch))
         report-error! (fn report-error! [throwable]
                         (async/>!! ch {:error throwable})
                         (async/>!! error-ch {:error throwable}))]
@@ -418,9 +418,13 @@
 
     (when abort-ch
       (async/go
-        (when-let [cause (async/<! abort-ch)]
-          (when (.abort request cause)
-            (report-error! cause)))))
+        (when-let [abort-request (async/<! abort-ch)]
+          (let [[cause callback] abort-request
+                aborted? (.abort request cause)]
+            (when callback
+              (callback aborted?))
+            (when aborted?
+              (report-error! cause))))))
 
     (.followRedirects request follow-redirects?)
 
