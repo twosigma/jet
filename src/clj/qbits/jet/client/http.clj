@@ -402,12 +402,15 @@
         ^Request request (.newRequest client ^String url)
         trailers-supported? (and trailers-fn (instance? HttpRequest request))
         close-request-channels! (fn close-request-channels! []
-                                 (when abort-ch
-                                   (async/close! abort-ch))
-                                 (async/close! body-ch)
-                                 (async/close! trailers-ch)
-                                 (async/close! ch)
-                                 (async/close! error-ch))]
+                                  (async/close! error-ch)
+                                  (async/close! body-ch)
+                                  (async/close! trailers-ch)
+                                  (when abort-ch
+                                    (async/close! abort-ch))
+                                  (async/close! ch))
+        report-error! (fn report-error! [throwable]
+                        (async/>!! ch {:error throwable})
+                        (async/>!! error-ch {:error throwable}))]
 
     (some->> version
       HttpVersion/fromString
@@ -415,8 +418,13 @@
 
     (when abort-ch
       (async/go
-        (when-let [cause (async/<! abort-ch)]
-          (.abort request cause))))
+        (when-let [abort-request (async/<! abort-ch)]
+          (let [[cause callback] abort-request
+                aborted? (.abort request cause)]
+            (when callback
+              (callback aborted?))
+            (when aborted?
+              (report-error! cause))))))
 
     (.followRedirects request follow-redirects?)
 
@@ -517,14 +525,13 @@
     (.onRequestFailure request
                        (reify Request$FailureListener
                          (onFailure [_ _ throwable]
-                           (async/put! ch {:error throwable}))))
+                           (report-error! throwable))))
 
     (.send request
            (reify Response$CompleteListener
              (onComplete [_ result]
                (when (not (.isSucceeded result))
-                   (async/put! ch {:error (.getFailure result)})
-                   (async/put! error-ch {:error (.getFailure result)}))
+                 (report-error! (.getFailure result)))
                (when-let [response (.getResponse result)]
                  (when (instance? HttpResponse response)
                    (when-let [trailers (.getTrailers ^HttpResponse response)]
