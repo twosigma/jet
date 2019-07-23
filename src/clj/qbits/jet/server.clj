@@ -129,6 +129,7 @@ Derived from ring.adapter.jetty"
   "Creates a new SslContextFactory instance from a map of options."
   [{:as options
     :keys [client-auth http2?
+           exclude-cipher-suites exclude-protocols use-cipher-suites-order
            keystore keystore-type key-password
            truststore trust-password truststore-type]}]
   (let [context (SslContextFactory.)]
@@ -150,9 +151,14 @@ Derived from ring.adapter.jetty"
       :need (.setNeedClientAuth context true)
       :want (.setWantClientAuth context true)
       nil)
+    (when exclude-cipher-suites
+      (.setExcludeCipherSuites context (into-array String exclude-cipher-suites)))
+    (when exclude-protocols
+      (.setExcludeProtocols context (into-array String exclude-protocols)))
     (when http2?
-      (.setCipherComparator context HTTP2Cipher/COMPARATOR)
-      (.setUseCipherSuitesOrder context true))
+      (.setCipherComparator context HTTP2Cipher/COMPARATOR))
+    (when-not (nil? use-cipher-suites-order)
+      (.setUseCipherSuitesOrder context use-cipher-suites-order))
     context))
 
 (defn ^HttpCompliance any->parser-compliance
