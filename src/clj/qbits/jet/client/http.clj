@@ -354,12 +354,16 @@
 
 (defn- track-response-trailers
   "Asynchronously loops and looks for presence of trailers in the response.
-   When available, they are propagated to the trailers channel and other request channels closed.
-   Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this."
+   Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this.
+   When trailers are available, they are propagated to the trailers channel and the request input body is closed.
+   The assumption is once trailers are available, the server is no longer interested in any of the request input data.
+   We explicitly avoid closing the response body channel since this introduces a race in the asynchronous
+   processing of any data streamed by the backend.
+   Instead, closing the request content eventually triggers the response complete listeners after all the
+   response bytes have been streamed."
   [response-trailers-ch response-body-ch content-provider-promise response]
   (async/go
-    ;; empirically determine the timeout
-    (let [trailer-interval-ms 2000]
+    (let [trailer-interval-ms 1000]
       (loop []
         ;; iterate and check if trailers are available
         (async/<! (async/timeout trailer-interval-ms))
