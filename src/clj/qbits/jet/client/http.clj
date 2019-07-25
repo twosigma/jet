@@ -428,14 +428,15 @@
       (.version request))
 
     (when abort-ch
-      (async/go
+      (async/go-loop []
         (when-let [abort-request (async/<! abort-ch)]
           (let [[cause callback] abort-request
                 aborted? (.abort request cause)]
             (when callback
               (callback aborted?))
             (when aborted?
-              (report-error! cause))))))
+              (report-error! cause))
+            (recur)))))
 
     (.followRedirects request follow-redirects?)
 
