@@ -354,20 +354,27 @@
 
 (defn- track-response-trailers
   "Asynchronously loops and looks for presence of trailers in the response.
-   When available, they are propagated to the trailers channel and other request channels closed.
-   Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this."
-  [response-trailers-ch response-body-ch close-request-channels! response]
+   Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this.
+   When trailers are available, they are propagated to the trailers channel and the request input body is closed.
+   The assumption is once trailers are available, the server is no longer interested in any of the request input data.
+   We explicitly avoid closing the response body channel since this introduces a race in the asynchronous
+   processing of any data streamed by the backend.
+   Instead, closing the request content eventually triggers the response complete listeners after all the
+   response bytes have been streamed."
+  [response-trailers-ch response-body-ch content-provider-promise response]
   (async/go
-    (loop []
-      ;; iterate every second and check if trailers are available
-      (async/<! (async/timeout 1000))
-      (let [trailers (.getTrailers ^HttpResponse response)]
-        (if trailers
-          (do
-            (async/>! response-trailers-ch (util/http-fields->map trailers))
-            (close-request-channels!))
-          (when-not (protocols/closed? response-body-ch)
-            (recur)))))))
+    (let [trailer-interval-ms 1000]
+      (loop []
+        ;; iterate and check if trailers are available
+        (async/<! (async/timeout trailer-interval-ms))
+        (let [trailers (.getTrailers ^HttpResponse response)]
+          (if trailers
+            (do
+              (async/>! response-trailers-ch (util/http-fields->map trailers))
+              ;; close the input stream as server has already responded with a trailer
+              (some-> content-provider-promise (deref 0 nil) (.close)))
+            (when-not (protocols/closed? response-body-ch)
+              (recur))))))))
 
 (defn request
   [^HttpClient client
@@ -410,7 +417,11 @@
                                   (async/close! ch))
         report-error! (fn report-error! [throwable]
                         (async/>!! ch {:error throwable})
-                        (async/>!! error-ch {:error throwable}))]
+                        (async/>!! error-ch {:error throwable}))
+        content-provider-promise (promise)
+        assign-content-provider! (fn assign-content-provider! [content-provider]
+                                   (deliver content-provider-promise content-provider)
+                                   content-provider)]
 
     (some->> version
       HttpVersion/fromString
@@ -465,6 +476,7 @@
       ;; HTTP/2 requests with a body need the trailer to set be set as late as possible
       ;; This allows us to avoid sending an empty terminating trailer frame if there are no trailers to send.
       (->> (encode-body body)
+           (assign-content-provider!)
            (untyped-content-provider
              (fn on-request-body-content-read []
                (when trailers-supported?
@@ -476,6 +488,7 @@
       (do
         (when body
           (->> (encode-body body)
+               (assign-content-provider!)
                (untyped-content-provider nil)
                (.content request)))
         (when trailers-supported?
@@ -510,6 +523,7 @@
                                (onContent [_ _ byte-buffer callback]
                                  (if (protocols/closed? body-ch)
                                    (let [ex (IOException. "Body channel closed unexpectedly")]
+                                     (report-error! ex)
                                      (.failed callback ex)
                                      (.abort request ex))
                                    (async/put! body-ch (byte-buffer->bytes byte-buffer)
@@ -520,7 +534,7 @@
                           (onHeaders [_ response]
                             (async/put! ch (make-response request response abort-ch body-ch error-ch trailers-ch))
                             (when (util/http2-request? version)
-                              (track-response-trailers trailers-ch body-ch close-request-channels! response)))))
+                              (track-response-trailers trailers-ch body-ch content-provider-promise response)))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
