@@ -286,9 +286,7 @@
           ^Request servlet-request (:servlet-request request-map)
           servlet-response  (.getServletResponse servlet-request)]
       (when (and trailers (instance? Response servlet-response))
-        (let [request-protocol (some-> servlet-request .getProtocol)
-              http2? (util/http2-request? request-protocol)]
-          (.setTrailers ^Response servlet-response (util/trailers-ch->supplier trailers http2?))))
+        (.setTrailers ^Response servlet-response (util/trailers-ch->supplier trailers)))
       (set-status+headers! servlet-response request-map status headers)
       (set-body! servlet-response request-map body)))
 
