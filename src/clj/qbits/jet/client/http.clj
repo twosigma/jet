@@ -10,24 +10,35 @@
     [qbits.jet.client.cookies :as cookies]
     [qbits.jet.util :as util])
   (:import
+    (clojure.lang
+      Sequential)
+    (java.net
+      HttpCookie)
+    (java.util.concurrent
+      TimeUnit)
+    (java.nio
+      ByteBuffer)
+    (java.nio.charset
+      Charset)
+    (java.io
+      ByteArrayInputStream
+      ByteArrayOutputStream
+      IOException)
     (org.eclipse.jetty.client
-      AsyncContentProvider
       HttpClient
       HttpRequest
-      HttpResponse
-      Synchronizable)
+      HttpResponse)
     (org.eclipse.jetty.util
-      Callback
       Fields)
     (org.eclipse.jetty.client.util
-      StringContentProvider
       BytesContentProvider
       ByteBufferContentProvider
       DeferredContentProvider
-      InputStreamContentProvider
-      PathContentProvider
       FormContentProvider
-      MultiPartContentProvider)
+      InputStreamContentProvider
+      MultiPartContentProvider
+      PathContentProvider
+      StringContentProvider)
     (org.eclipse.jetty.http
       HttpField
       HttpVersion)
@@ -37,20 +48,11 @@
       Request
       Request$FailureListener
       Response
+      Response$AsyncContentListener
       Response$CompleteListener
-      Response$HeadersListener
-      Response$AsyncContentListener)
+      Response$HeadersListener)
     (org.eclipse.jetty.client.http
-      HttpClientTransportOverHTTP)
-    (java.util.concurrent TimeUnit)
-    java.net.HttpCookie
-    (java.nio ByteBuffer)
-    (java.io
-      ByteArrayInputStream
-      ByteArrayOutputStream
-      IOException)
-    (clojure.lang Sequential)
-    (java.util Iterator)))
+      HttpClientTransportOverHTTP)))
 
 (def ^:const array-class (class (clojure.core/byte-array 0)))
 (def default-buffer-size (* 1024 1024 4))
@@ -130,17 +132,16 @@
   (encode-chunk [x]
     (ByteBuffer/wrap x))
   (encode-body [ba]
-    (BytesContentProvider.
-      (into-array array-class [ba])))
+    (BytesContentProvider. nil (into-array array-class [ba])))
 
   ByteBuffer
   (encode-chunk [x] x)
   (encode-body [bb]
-    (ByteBufferContentProvider. (into-array ByteBuffer [bb])))
+    (ByteBufferContentProvider. nil (into-array ByteBuffer [bb])))
 
   java.nio.file.Path
   (encode-body [p]
-    (PathContentProvider. p))
+    (PathContentProvider. nil p))
 
   java.io.InputStream
   (encode-body [s]
@@ -150,7 +151,7 @@
   (encode-chunk [x]
     (ByteBuffer/wrap (.getBytes x "UTF-8")))
   (encode-body [x]
-    (StringContentProvider. x "UTF-8"))
+    (StringContentProvider. nil x (Charset/forName "UTF-8")))
   (encode-content-type [x]
     (str "Content-Type: " x))
 
@@ -291,67 +292,6 @@
     (.setAccessible true)
     (.set request query-string)))
 
-(defn- wrap-iterator
-  [on-last-chunk ^Iterator iterator]
-  (let [default-lock-object (Object.)]
-    (reify
-      Callback
-      (succeeded [_]
-        (when (instance? Callback iterator)
-          (.succeeded ^Callback iterator)))
-      (failed [_ throwable]
-        (when (instance? Callback iterator)
-          (.failed ^Callback iterator throwable)))
-      Iterator
-      (hasNext [_]
-        (let [more? (.hasNext iterator)]
-          (when-not more?
-            (on-last-chunk))
-          more?))
-      (next [_]
-        ;; We rely on the caller (and that is currently true in Jetty) always checking
-        ;; more data is available by having called hasNext() previously.
-        (.next iterator))
-      Synchronizable
-      ;; Mimic DeferredContentProviderIterator which implements Synchronizable
-      (getLock [_]
-        (if (instance? Synchronizable iterator)
-          (.getLock ^Synchronizable iterator)
-          default-lock-object)))))
-
-(defn- untyped-content-provider
-  [on-last-chunk ^ContentProvider content-provider]
-  (if (instance? AsyncContentProvider content-provider)
-    (reify
-      AsyncContentProvider
-      ;; interface AsyncContentProvider methods
-      (setListener [_ listener]
-        (.setListener ^AsyncContentProvider content-provider listener))
-      ;; interface ContentProvider methods
-      (getLength [_] (.getLength content-provider))
-      (isReproducible [_] (.isReproducible content-provider))
-      ;; interface Iterable<ByteBuffer> methods
-      (iterator [_]
-        (cond->> (.iterator content-provider)
-          ;; we wrap the iterator since Jetty doesn't currently provide a listener for
-          ;; when the request body has been read.
-          on-last-chunk (wrap-iterator on-last-chunk)))
-      (forEach [_ action] (.forEach content-provider action))
-      (spliterator [_] (.spliterator content-provider)))
-    (reify
-      ContentProvider
-      ;; interface ContentProvider methods
-      (getLength [_] (.getLength content-provider))
-      (isReproducible [_] (.isReproducible content-provider))
-      ;; interface Iterable<ByteBuffer> methods
-      (iterator [_]
-        (cond->> (.iterator content-provider)
-          ;; we wrap the iterator since Jetty doesn't currently provide a listener for
-          ;; when the request body has been read.
-          on-last-chunk (wrap-iterator on-last-chunk)))
-      (forEach [_ action] (.forEach content-provider action))
-      (spliterator [_] (.spliterator content-provider)))))
-
 (defn- track-response-trailers
   "Asynchronously loops and looks for presence of trailers in the response.
    Please see https://github.com/eclipse/jetty.project/issues/3842 for details on why we need this.
@@ -473,27 +413,13 @@
                             (.close provider)
                             provider)))
 
-    (if (and body (util/http2-request? version))
-      ;; HTTP/2 requests with a body need the trailer to set be set as late as possible
-      ;; This allows us to avoid sending an empty terminating trailer frame if there are no trailers to send.
-      (->> (encode-body body)
-           (assign-content-provider!)
-           (untyped-content-provider
-             (fn on-request-body-content-read []
-               (when trailers-supported?
-                 (when-let [trailers (trailers-fn)]
-                   (.trailers ^HttpRequest request (util/trailers->supplier trailers))))))
-           (.content request))
-      ;; For HTTP/1.1 requests or requests without a body, we need the trailer set eagerly
-      ;; For HTTP/2 requests, we may end up sending an empty trailer frame if the body is empty
-      (do
-        (when body
-          (->> (encode-body body)
-               (assign-content-provider!)
-               (untyped-content-provider nil)
-               (.content request)))
-        (when trailers-supported?
-          (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn)))))
+    (do
+      (when body
+        (->> (encode-body body)
+          (assign-content-provider!)
+          (.content request)))
+      (when trailers-supported?
+        (.trailers ^HttpRequest request (util/trailers-fn->supplier trailers-fn))))
 
     (doseq [[k v] headers]
       (if (coll? v)
