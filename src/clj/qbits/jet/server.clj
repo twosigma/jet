@@ -215,7 +215,7 @@ supplied options:
          max-idle-time 200000
          ssl? false
          join? true
-         ports []
+         port 80
          parser-compliance HttpCompliance/LEGACY
          input-buffer-size 8192}}]
   (let [pool (doto (QueuedThreadPool. (int max-threads)
@@ -228,11 +228,9 @@ supplied options:
                                   (.setHttpCompliance (any->parser-compliance parser-compliance))
                                   (.setInputBufferSize (int input-buffer-size)))
         ssl-enabled? (some? (or ssl? ssl-port))
-        http-ports (cond-> ports
-                     port
-                     (conj port)
-                     (and (empty? ports) (nil? port))
-                     (conj 80))
+        port-seq (if (number? port)
+                   [port]
+                   port)
         ;; use HTTP if ssl is disabled or
         ;;             ssl is explicitly enabled and ssl-port is explicitly provided
         http-connectors (if (or (not ssl-enabled?)
@@ -247,7 +245,7 @@ supplied options:
                                    (.setPort port)
                                    (.setHost host)
                                    (.setIdleTimeout max-idle-time)))
-                               http-ports)
+                               port-seq)
                           [])
         connectors (cond-> http-connectors
                      ssl-enabled?
