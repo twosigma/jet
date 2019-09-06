@@ -170,7 +170,6 @@ supplied options:
 
 
 * `:port` - the port to listen on (defaults to 80)
-* `:ports` - additional ports to listen on (defaults to [])
 * `:host` - the hostname to listen on
 * `:join?` - blocks the thread until server ends (defaults to true)
 * `:http2?` - enable HTTP2 transport
