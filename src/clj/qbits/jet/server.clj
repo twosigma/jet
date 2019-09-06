@@ -205,7 +205,7 @@ supplied options:
                          If the function return true, a websocket is created and the `websocket-handler` is eventually
                          called."
   [{:as options
-    :keys [websocket-handler ring-handler host port max-threads min-threads
+    :keys [websocket-handler ring-handler host port ports max-threads min-threads
            input-buffer-size max-idle-time ssl-port configurator parser-compliance
            daemon? ssl? join? http2? http2c?]
     :or {max-threads 50
@@ -214,6 +214,7 @@ supplied options:
          max-idle-time 200000
          ssl? false
          join? true
+         port 80
          parser-compliance HttpCompliance/LEGACY
          input-buffer-size 8192}}]
   (let [pool (doto (QueuedThreadPool. (int max-threads)
@@ -226,20 +227,26 @@ supplied options:
                                   (.setHttpCompliance (any->parser-compliance parser-compliance))
                                   (.setInputBufferSize (int input-buffer-size)))
         ssl-enabled? (some? (or ssl? ssl-port))
-        connectors (cond-> []
-                     ;; use HTTP if ssl is disabled or
-                     ;;             ssl is explicitly enabled and ssl-port is explicitly provided
-                     (or (not ssl-enabled?)
-                         (and ssl? ssl-port))
-                     (conj (doto (ServerConnector.
-                                   ^Server server
-                                   ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
-                                   (into-array ConnectionFactory
-                                               (cond-> [http-connection-factory]
-                                                 http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
-                             (.setPort (or port 80))
-                             (.setHost host)
-                             (.setIdleTimeout max-idle-time)))
+        port-seq (if (number? port)
+                   [port]
+                   port)
+        ;; use HTTP if ssl is disabled or
+        ;;             ssl is explicitly enabled and ssl-port is explicitly provided
+        http-connectors (if (or (not ssl-enabled?)
+                                (and ssl? ssl-port))
+                          (map (fn make-http-connector [port]
+                                 (doto (ServerConnector.
+                                         ^Server server
+                                         ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
+                                         (into-array ConnectionFactory
+                                                     (cond-> [http-connection-factory]
+                                                       http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
+                                   (.setPort port)
+                                   (.setHost host)
+                                   (.setIdleTimeout max-idle-time)))
+                               port-seq)
+                          [])
+        connectors (cond-> http-connectors
                      ssl-enabled?
                      (conj (doto (ServerConnector.
                                    ^Server server
