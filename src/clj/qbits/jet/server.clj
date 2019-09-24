@@ -169,7 +169,7 @@ Derived from ring.adapter.jetty"
 supplied options:
 
 
-* `:port` - the port to listen on (defaults to 80)
+* `:port` - the port to listen on (defaults to 80), can be a sequence
 * `:host` - the hostname to listen on
 * `:join?` - blocks the thread until server ends (defaults to true)
 * `:http2?` - enable HTTP2 transport
@@ -184,7 +184,9 @@ supplied options:
 * `:truststore` - a truststore to use for SSL connections
 * `:truststore-type` - the format of trust store
 * `:trust-password` - the password to the truststore
+* `:accept-queue-size` - the accept queue size (also known as accept backlog)
 * `:max-threads` - the maximum number of threads to use (default 50)
+* `:min-threads` - the minimum number of threads to use (default 8)
 * `:max-idle-time`  - the maximum idle time in milliseconds for a connection (default 200000)
 * `:ws-max-idle-time`  - the maximum idle time in milliseconds for a websocket connection (default 500000)
 * `:client-auth` - SSL client certificate authenticate, may be set to :need, :want or :none (defaults to :none)
@@ -196,7 +198,6 @@ supplied options:
 * `:send-date-header?` - (default false)
 * `:header-cache-size` - (default 512)
 * `:websocket-handler` - a handler function that will receive a RING request map with the following keys added:
-
     * `:in`: core.async chan that receives data sent by the client
     * `:out`: core async chan you can use to send data to client
     * `:ctrl`: core.async chan that received control messages such as: `[::error e]`, `[::close code reason]`
@@ -205,10 +206,11 @@ supplied options:
                          If the function return true, a websocket is created and the `websocket-handler` is eventually
                          called."
   [{:as options
-    :keys [websocket-handler ring-handler host port ports max-threads min-threads
+    :keys [websocket-handler ring-handler host port accept-queue-size max-threads min-threads
            input-buffer-size max-idle-time ssl-port configurator parser-compliance
            daemon? ssl? join? http2? http2c?]
-    :or {max-threads 50
+    :or {accept-queue-size 0
+         max-threads 50
          min-threads 8
          daemon? false
          max-idle-time 200000
@@ -243,6 +245,7 @@ supplied options:
                                                        http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
                                    (.setPort port)
                                    (.setHost host)
+                                   (.setAcceptQueueSize accept-queue-size)
                                    (.setIdleTimeout max-idle-time)))
                                port-seq)
                           [])
@@ -258,6 +261,7 @@ supplied options:
                                                  http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
                              (.setPort (or ssl-port port 443))
                              (.setHost host)
+                             (.setAcceptQueueSize accept-queue-size)
                              (.setIdleTimeout max-idle-time))))]
     (when (empty? connectors)
       (throw (IllegalStateException. "No connectors found! HTTP port or SSL must be configured!")))
