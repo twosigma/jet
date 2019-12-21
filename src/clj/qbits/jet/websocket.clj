@@ -139,8 +139,9 @@
     (-send! msg this))
 
   (close! [this]
-    (when (some-> session .isOpen)
-      (.close session)))
+    (let [session-local session]
+      (when (some-> session-local .isOpen)
+        (.close session-local))))
 
   (remote-addr [this]
     (.getRemoteAddress session))
