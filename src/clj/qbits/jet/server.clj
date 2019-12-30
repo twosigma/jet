@@ -245,6 +245,7 @@ supplied options:
                                                        http2c? (conj (HTTP2CServerConnectionFactory. http-conf)))))
                                    (.setPort port)
                                    (.setHost host)
+                                   (.setName (str "http-connector-" port))
                                    (.setAcceptQueueSize accept-queue-size)
                                    (.setIdleTimeout max-idle-time)))
                                port-seq)
@@ -261,6 +262,7 @@ supplied options:
                                                  http2? (conj (HTTP2ServerConnectionFactory. http-conf)))))
                              (.setPort (or ssl-port port 443))
                              (.setHost host)
+                             (.setName (str "https-connector-" (or ssl-port port 443)))
                              (.setAcceptQueueSize accept-queue-size)
                              (.setIdleTimeout max-idle-time))))]
     (when (empty? connectors)
