@@ -17,7 +17,8 @@
                  [org.eclipse.jetty/jetty-alpn-openjdk8-client ~jetty-version]
                  [org.eclipse.jetty/jetty-alpn-openjdk8-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
-                 [org.eclipse.jetty.http2/http2-common ~jetty-version]
+                 [org.eclipse.jetty.http2/http2-common ~jetty-version
+                  :exclusions [org.eclipse.jetty.http2/http2-hpack]]
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  [cheshire "5.5.0"]]
@@ -50,4 +51,5 @@
           :defaults {:doc/format :markdown}}
   :source-paths ["src/clj"]
   :java-source-paths ["src/java"]
+  :resource-paths ["src/resources"]
   :global-vars {*warn-on-reflection* true})
