@@ -1,4 +1,4 @@
-(def jetty-version "9.4.20.v20190813")
+(def jetty-version "9.4.29.v20200521")
 (defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
@@ -17,8 +17,7 @@
                  [org.eclipse.jetty/jetty-alpn-openjdk8-client ~jetty-version]
                  [org.eclipse.jetty/jetty-alpn-openjdk8-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
-                 [org.eclipse.jetty.http2/http2-common ~jetty-version
-                  :exclusions [org.eclipse.jetty.http2/http2-hpack]]
+                 [org.eclipse.jetty.http2/http2-common ~jetty-version]
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  [cheshire "5.5.0"]]
@@ -50,6 +49,5 @@
           :output-dir "doc"
           :defaults {:doc/format :markdown}}
   :source-paths ["src/clj"]
-  :java-source-paths ["src/java"]
   :resource-paths ["src/resources"]
   :global-vars {*warn-on-reflection* true})
