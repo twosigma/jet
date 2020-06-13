@@ -47,6 +47,7 @@
       ContentProvider
       Request
       Request$FailureListener
+      Request$SuccessListener
       Response
       Response$AsyncContentListener
       Response$CompleteListener
@@ -324,6 +325,7 @@
            accept
            as
            idle-timeout
+           log-fn
            timeout
            agent
            follow-redirects?
@@ -337,7 +339,8 @@
          as :string
          follow-redirects? true
          fold-chunked-response? true
-         fold-chunked-response-buffer-size Integer/MAX_VALUE}
+         fold-chunked-response-buffer-size Integer/MAX_VALUE
+         log-fn (constantly true)}
     :as request-map}]
   (let [ch (async/promise-chan)
         error-ch (async/promise-chan)
@@ -370,6 +373,7 @@
     (when abort-ch
       (async/go-loop []
         (when-let [abort-request (async/<! abort-ch)]
+          (log-fn "processing abort request" abort-request)
           (let [[cause callback] abort-request
                 aborted? (.abort request cause)]
             (when callback
@@ -448,8 +452,10 @@
     (.onResponseContentAsync request
                              (reify Response$AsyncContentListener
                                (onContent [_ _ byte-buffer callback]
+                                 (log-fn "received content" byte-buffer)
                                  (if (protocols/closed? body-ch)
                                    (let [ex (IOException. "Body channel closed unexpectedly")]
+                                     (log-fn "body channel closed unexpectedly")
                                      (report-error! ex)
                                      (.failed callback ex)
                                      (.abort request ex))
@@ -459,18 +465,26 @@
     (.onResponseHeaders request
                         (reify Response$HeadersListener
                           (onHeaders [_ response]
+                            (log-fn "received response headers")
                             (async/put! ch (make-response request response abort-ch body-ch error-ch trailers-ch))
                             (when (util/http2-request? version)
                               (track-response-trailers trailers-ch body-ch content-provider-promise response)))))
 
     (.onRequestFailure request
                        (reify Request$FailureListener
-                         (onFailure [_ _ throwable]
+                         (onFailure [_ request throwable]
+                           (log-fn "request failed" request throwable)
                            (report-error! throwable))))
+
+    (.onRequestSuccess request
+                       (reify Request$SuccessListener
+                         (onSuccess [_ request]
+                           (log-fn "request succeeded" request))))
 
     (.send request
            (reify Response$CompleteListener
              (onComplete [_ result]
+               (log-fn "response complete" result)
                (when (not (.isSucceeded result))
                  (report-error! (.getFailure result)))
                (when-let [response (.getResponse result)]
