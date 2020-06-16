@@ -452,20 +452,22 @@
     (.onResponseContentAsync request
                              (reify Response$AsyncContentListener
                                (onContent [_ _ byte-buffer callback]
-                                 (log-fn "received content" byte-buffer)
+                                 (log-fn "AsyncContentListener: received content" byte-buffer)
                                  (if (protocols/closed? body-ch)
                                    (let [ex (IOException. "Body channel closed unexpectedly")]
-                                     (log-fn "body channel closed unexpectedly")
+                                     (log-fn "AsyncContentListener: body channel closed unexpectedly" byte-buffer)
                                      (report-error! ex)
                                      (.failed callback ex)
                                      (.abort request ex))
                                    (async/put! body-ch (byte-buffer->bytes byte-buffer)
-                                               (fn [_] (.succeeded callback)))))))
+                                               (fn [_]
+                                                 (log-fn "AsyncContentListener: invoking succeeded" byte-buffer)
+                                                 (.succeeded callback)))))))
 
     (.onResponseHeaders request
                         (reify Response$HeadersListener
                           (onHeaders [_ response]
-                            (log-fn "received response headers")
+                            (log-fn "HeadersListener: received response headers")
                             (async/put! ch (make-response request response abort-ch body-ch error-ch trailers-ch))
                             (when (util/http2-request? version)
                               (track-response-trailers trailers-ch body-ch content-provider-promise response)))))
@@ -473,18 +475,18 @@
     (.onRequestFailure request
                        (reify Request$FailureListener
                          (onFailure [_ request throwable]
-                           (log-fn "request failed" request throwable)
+                           (log-fn "FailureListener: request failed" request throwable)
                            (report-error! throwable))))
 
     (.onRequestSuccess request
                        (reify Request$SuccessListener
                          (onSuccess [_ request]
-                           (log-fn "request succeeded" request))))
+                           (log-fn "SuccessListener: request succeeded" request))))
 
     (.send request
            (reify Response$CompleteListener
              (onComplete [_ result]
-               (log-fn "response complete" result)
+               (log-fn "CompleteListener: response complete" result)
                (when (not (.isSucceeded result))
                  (report-error! (.getFailure result)))
                (when-let [response (.getResponse result)]
