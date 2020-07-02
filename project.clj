@@ -14,8 +14,8 @@
                  [org.eclipse.jetty.websocket/websocket-servlet ~jetty-version]
                  [org.eclipse.jetty.websocket/websocket-client ~jetty-version]
                  [org.eclipse.jetty/jetty-client ~jetty-version]
-                 [org.eclipse.jetty/jetty-alpn-openjdk8-client ~jetty-version]
-                 [org.eclipse.jetty/jetty-alpn-openjdk8-server ~jetty-version]
+                 [org.eclipse.jetty/jetty-alpn-java-client ~jetty-version]
+                 [org.eclipse.jetty/jetty-alpn-java-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
                  [org.eclipse.jetty.http2/http2-common ~jetty-version
                   :exclusions [org.eclipse.jetty.http2/http2-hpack]]
