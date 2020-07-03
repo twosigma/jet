@@ -1,4 +1,4 @@
-(def jetty-version "9.4.30.v20200611")
+(def jetty-version "9.4.31-SNAPSHOT")
 (defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
@@ -29,7 +29,7 @@
   :repositories {"sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
                              :snapshots false
                              :releases {:checksum :fail :update :always}}
-                 "sonatype-snapshots" {:url "http://oss.sonatype.org/content/repositories/snapshots"
+                 "sonatype-snapshots" {:url "https://oss.sonatype.org/content/repositories/jetty-snapshots"
                                        :snapshots true
                                        :releases {:checksum :fail :update :always}}}
   :profiles {:1.5 {:dependencies [[org.clojure/clojure "1.5.0"]]}
