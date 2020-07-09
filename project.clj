@@ -24,8 +24,6 @@
                  [cheshire "5.5.0"]]
 
   :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]]
-  :boot-dependencies [[org.mortbay.jetty.alpn/alpn-boot "8.1.13.v20181017"
-                       :prepend true]]
 
   :repositories {"sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
                              :snapshots false
