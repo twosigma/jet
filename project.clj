@@ -1,4 +1,4 @@
-(def jetty-version "9.4.20.v20190813")
+(def jetty-version "9.4.31.v20200723")
 (defproject twosigma/jet "0.7.10"
   :description "Jetty9 ring server adapter with WebSocket support"
   :url "https://github.com/mpenet/jet"
@@ -17,8 +17,7 @@
                  [org.eclipse.jetty/jetty-alpn-java-client ~jetty-version]
                  [org.eclipse.jetty/jetty-alpn-java-server ~jetty-version]
                  [org.eclipse.jetty.alpn/alpn-api "1.1.3.v20160715"]
-                 [org.eclipse.jetty.http2/http2-common ~jetty-version
-                  :exclusions [org.eclipse.jetty.http2/http2-hpack]]
+                 [org.eclipse.jetty.http2/http2-common ~jetty-version]
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  [cheshire "5.5.0"]]
@@ -28,7 +27,7 @@
   :repositories {"sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
                              :snapshots false
                              :releases {:checksum :fail :update :always}}
-                 "sonatype-snapshots" {:url "http://oss.sonatype.org/content/repositories/snapshots"
+                 "sonatype-snapshots" {:url "https://oss.sonatype.org/content/repositories/jetty-snapshots"
                                        :snapshots true
                                        :releases {:checksum :fail :update :always}}}
   :profiles {:1.5 {:dependencies [[org.clojure/clojure "1.5.0"]]}
