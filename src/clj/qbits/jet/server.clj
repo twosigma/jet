@@ -2,8 +2,8 @@
   "Adapter for the Jetty 9 server, with websocket + core.async support.
 Derived from ring.adapter.jetty"
   (:require
-   [qbits.jet.servlet :as servlet]
    [clojure.core.async :as async]
+   [qbits.jet.servlet :as servlet]
    [qbits.jet.websocket :refer :all])
   (:import
     (org.eclipse.jetty.alpn.server
@@ -33,7 +33,7 @@ Derived from ring.adapter.jetty"
    (org.eclipse.jetty.util.thread
     QueuedThreadPool
     ScheduledExecutorScheduler)
-   (org.eclipse.jetty.util.ssl SslContextFactory)
+    (org.eclipse.jetty.util.ssl KeyStoreScanner SslContextFactory)
    (org.eclipse.jetty.websocket.server WebSocketHandler)
    (org.eclipse.jetty.websocket.servlet
     WebSocketServletFactory
@@ -180,6 +180,7 @@ supplied options:
 * `:ssl-port` - the SSL port to listen on (defaults to 443, implies :ssl?)
 * `:keystore` - the keystore to use for SSL connections
 * `:keystore-type` - the format of keystore
+* `:keystore-scan-interval-secs` - the scanning interval to detect changes to and reload the keystore
 * `:key-password` - the password to the keystore
 * `:truststore` - a truststore to use for SSL connections
 * `:truststore-type` - the format of trust store
@@ -208,7 +209,7 @@ supplied options:
   [{:as options
     :keys [websocket-handler ring-handler host port accept-queue-size max-threads min-threads
            input-buffer-size max-idle-time ssl-port configurator parser-compliance
-           daemon? ssl? join? http2? http2c?]
+           daemon? ssl? join? http2? http2c? keystore-scan-interval-secs]
     :or {accept-queue-size 0
          max-threads 50
          min-threads 8
@@ -218,7 +219,8 @@ supplied options:
          join? true
          port 80
          parser-compliance HttpCompliance/LEGACY
-         input-buffer-size 8192}}]
+         input-buffer-size 8192
+         keystore-scan-interval-secs (* 60 60 24)}}]
   (let [pool (doto (QueuedThreadPool. (int max-threads)
                                       (int min-threads))
                (.setDaemon daemon?))
@@ -254,7 +256,12 @@ supplied options:
                      ssl-enabled?
                      (conj (doto (ServerConnector.
                                    ^Server server
-                                   (ssl-context-factory options)
+                                   (let [context-factory (ssl-context-factory options)]
+                                     (when keystore-scan-interval-secs
+                                       (let [keystore-scanner (KeyStoreScanner. context-factory)]
+                                         (.setScanInterval keystore-scanner keystore-scan-interval-secs)
+                                         (.addBean server keystore-scanner)))
+                                     context-factory)
                                    ^"[Lorg.eclipse.jetty.server.ConnectionFactory;"
                                    (into-array ConnectionFactory
                                                (cond-> [(ALPNServerConnectionFactory. ^String (cond->> "http/1.1" http2? (str "h2,")))
