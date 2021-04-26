@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [get])
   (:require
    [clojure.core.async :as async]
+   [clojure.java.io :as io]
    [qbits.jet.client.ssl :as ssl]
    [qbits.jet.client.auth :as auth]
    [qbits.jet.client.cookies :as cookies]
@@ -11,7 +12,11 @@
   (:import
    (org.eclipse.jetty.client
     HttpClient
-    HttpRequest)
+    HttpProxy
+    HttpRequest
+    ProxyConfiguration)
+   (org.eclipse.jetty.client.Origin
+    Address)
    (org.eclipse.jetty.util Fields)
    (org.eclipse.jetty.client.util
     StringContentProvider
@@ -186,6 +191,7 @@
             cookie-store
             remove-idle-destinations?
             dispatch-io?
+            proxy-url
             tcp-no-delay?
             strict-event-ordering?
             ssl-context-factory]
@@ -235,6 +241,14 @@
 
      (when cookie-store
        (.setCookieStore client cookie-store))
+
+     (when proxy-url
+       (let [proxy-url (io/as-url proxy-url)
+             proxy-address (Address. (.getHost proxy-url) (.getPort proxy-url))
+             configured-proxy (HttpProxy. proxy-address ssl-context-factory)
+             ^ProxyConfiguration proxy-config (.getProxyConfiguration client)
+             proxies (.getProxies proxy-config)]
+         (.add proxies configured-proxy)))
 
      (.setRemoveIdleDestinations client remove-idle-destinations?)
      (.setDispatchIO client dispatch-io?)
