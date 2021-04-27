@@ -14,9 +14,9 @@
     HttpClient
     HttpProxy
     HttpRequest
+    Origin
+    Origin$Address
     ProxyConfiguration)
-   (org.eclipse.jetty.client.Origin
-    Address)
    (org.eclipse.jetty.util Fields)
    (org.eclipse.jetty.client.util
     StringContentProvider
@@ -244,7 +244,7 @@
 
      (when proxy-url
        (let [proxy-url (io/as-url proxy-url)
-             proxy-address (Address. (.getHost proxy-url) (.getPort proxy-url))
+             proxy-address (Origin$Address. (.getHost proxy-url) (.getPort proxy-url))
              configured-proxy (HttpProxy. proxy-address ssl-context-factory)
              ^ProxyConfiguration proxy-config (.getProxyConfiguration client)
              proxies (.getProxies proxy-config)]
