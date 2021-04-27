@@ -245,7 +245,9 @@
      (when proxy-url
        (let [proxy-url (io/as-url proxy-url)
              proxy-address (Origin$Address. (.getHost proxy-url) (.getPort proxy-url))
-             configured-proxy (HttpProxy. proxy-address ssl-context-factory)
+             proxy-protocol (.getProtocol proxy-url)
+             proxy-secure? (= proxy-protocol "https")
+             configured-proxy (HttpProxy. proxy-address proxy-secure?)
              ^ProxyConfiguration proxy-config (.getProxyConfiguration client)
              proxies (.getProxies proxy-config)]
          (.add proxies configured-proxy)))
