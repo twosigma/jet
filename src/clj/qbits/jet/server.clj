@@ -33,7 +33,10 @@ Derived from ring.adapter.jetty"
    (org.eclipse.jetty.util.thread
     QueuedThreadPool
     ScheduledExecutorScheduler)
-    (org.eclipse.jetty.util.ssl KeyStoreScanner SslContextFactory)
+    (org.eclipse.jetty.util.ssl
+      KeyStoreScanner
+      SslContextFactory
+      SslContextFactory$Server)
    (org.eclipse.jetty.websocket.server WebSocketHandler)
    (org.eclipse.jetty.websocket.servlet
     WebSocketServletFactory
@@ -131,7 +134,7 @@ Derived from ring.adapter.jetty"
     :keys [client-auth http2?
            keystore keystore-type key-password
            truststore trust-password truststore-type]}]
-  (let [context (SslContextFactory.)]
+  (let [context (SslContextFactory$Server.)]
     (if (string? keystore)
       (.setKeyStorePath context keystore)
       (.setKeyStore context ^java.security.KeyStore keystore))
