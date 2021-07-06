@@ -48,8 +48,8 @@
       Request
       Request$FailureListener
       Response
-      Response$AsyncContentListener
       Response$CompleteListener
+      Response$DemandedContentListener
       Response$HeadersListener)
     (org.eclipse.jetty.client.http
       HttpClientTransportOverHTTP)))
@@ -445,16 +445,18 @@
       (doseq [[name value] cookies]
         (.cookie request (HttpCookie. name value))))
 
-    (.onResponseContentAsync request
-                             (reify Response$AsyncContentListener
-                               (onContent [_ _ byte-buffer callback]
-                                 (if (protocols/closed? body-ch)
-                                   (let [ex (IOException. "Body channel closed unexpectedly")]
-                                     (report-error! ex)
-                                     (.failed callback ex)
-                                     (.abort request ex))
-                                   (async/put! body-ch (byte-buffer->bytes byte-buffer)
-                                               (fn [_] (.succeeded callback)))))))
+    (.onResponseContentDemanded request
+                                (reify Response$DemandedContentListener
+                                  (onContent [_ _ demand byte-buffer callback]
+                                    (if (protocols/closed? body-ch)
+                                      (let [ex (IOException. "Body channel closed unexpectedly")]
+                                        (report-error! ex)
+                                        (.failed callback ex)
+                                        (.abort request ex))
+                                      (async/put! body-ch (byte-buffer->bytes byte-buffer)
+                                                  (fn [_]
+                                                    (.succeeded callback)
+                                                    (.accept demand 1)))))))
 
     (.onResponseHeaders request
                         (reify Response$HeadersListener
