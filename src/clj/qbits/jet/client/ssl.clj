@@ -1,6 +1,8 @@
 (ns qbits.jet.client.ssl
-  (:import (org.eclipse.jetty.util.ssl SslContextFactory)))
+  (:import (org.eclipse.jetty.util.ssl
+             SslContextFactory
+             SslContextFactory$Client)))
 
 (defn ^SslContextFactory insecure-ssl-context-factory
   []
-  (SslContextFactory. true))
+  (SslContextFactory$Client. true))
