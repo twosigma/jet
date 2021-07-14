@@ -21,7 +21,7 @@
                  [org.eclipse.jetty.http2/http2-http-client-transport ~jetty-version]
                  [org.eclipse.jetty.http2/http2-client ~jetty-version]
                  [cheshire "5.5.0"]]
-
+  :deploy-repositories [["clojars" {:url "https://clojars.org/repo/" :sign-releases false}]]
   :plugins [[info.sunng/lein-bootclasspath-deps "0.3.0"]]
 
   :repositories {"sonatype" {:url "http://oss.sonatype.org/content/repositories/releases"
